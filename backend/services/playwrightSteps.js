@@ -1049,8 +1049,8 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
         // Prova i selettori specifici per il campo telefono (forniti dall'utente)
         const phoneSelectors = [
           'input[name="mobilePhone"]', // Selettore principale
-          'input#_rge_', // ID specifico dal HTML fornito dall'utente
-          'input[aria-describedby*="_rep_"]', // Backup con aria-describedby
+          'input#_r17_', // ID specifico dall'HTML fornito
+          'input[aria-describedby="_r19_"]', // Backup con aria-describedby
           '.PhoneNumberInputWrapper input[type="text"]' // Selettore container
         ];
         
@@ -1150,202 +1150,38 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
       await captureScreenshot(page, 'after-additional-wait');
     }
     
-    // 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
+// 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
     const paymentMethod = bookingData.paymentMethod || 'credit_card';
     
     if (paymentMethod === 'credit_card') {
       try {
-        // Prima aspettiamo che almeno uno dei radio button sia presente
-        const radioButtonSelectors = [
-          'input[name="paymentMethodId"][value="104"]', // Selettore principale
-          'input#_ret_', // ID specifico dal HTML
-          'input[type="radio"][value="104"]', // Backup con type radio
-          '.RadioInput input[value="104"]', // Container specifico
-          'input[aria-describedby="_reu_"]', // Backup con aria-describedby
-          'input[name="paymentMethodId"]' // Qualsiasi radio per pagamento
-        ];
+        const cardRadioButton = await page.locator('input#_r1c_').first();
+        const termsCheckbox = await page.locator('input#_r1j_').first();
         
-        logger.info('Waiting for payment method radio buttons to appear...');
-        let foundRadioButton = null;
-        let usedSelector = null;
-        
-        // Prima cerchiamo di trovare almeno un radio button con timeout più lungo
-        for (const selector of radioButtonSelectors) {
-          try {
-            logger.info(`Trying to find radio button with selector: ${selector}`);
-            await page.waitForSelector(selector, { timeout: 15000 }); // Timeout aumentato a 15 secondi
-            foundRadioButton = page.locator(selector).first();
-            usedSelector = selector;
-            logger.info(`Found radio button with selector: ${selector}`);
-            break;
-          } catch (e) {
-            logger.debug(`Radio selector ${selector} not found: ${e.message}`);
-            continue;
-          }
-        }
-        
-        if (!foundRadioButton) {
-          logger.error('No payment method radio buttons found. Taking debug screenshot...');
-          await captureScreenshot(page, 'no-radio-buttons-found');
-          
-          // Proviamo a trovare qualsiasi input radio sulla pagina
-          const allRadios = await page.locator('input[type="radio"]').all();
-          logger.info(`Found ${allRadios.length} radio buttons on page`);
-          
-          for (let i = 0; i < allRadios.length; i++) {
-            try {
-              const radioInfo = {
-                index: i,
-                name: await allRadios[i].getAttribute('name'),
-                value: await allRadios[i].getAttribute('value'),
-                id: await allRadios[i].getAttribute('id'),
-                visible: await allRadios[i].isVisible()
-              };
-              logger.info(`Radio button ${i}:`, radioInfo);
-            } catch (e) {
-              logger.debug(`Error inspecting radio ${i}: ${e.message}`);
-            }
-          }
-          
-          throw new Error('No payment method radio buttons found on page');
-        }
-        
-        // Ora tentiamo di selezionare il radio button
-        logger.info('Attempting to select credit card payment method...');
-        
-        // Verifica se è visibile e selezionabile
-        const isVisible = await foundRadioButton.isVisible({ timeout: 3000 });
-        const isEnabled = await foundRadioButton.isEnabled();
-        
-        logger.info('Radio button state:', { 
-          selector: usedSelector, 
-          visible: isVisible, 
-          enabled: isEnabled 
-        });
-        
-        if (isVisible && isEnabled) {
-          // Controlla se è già selezionato
-          const isChecked = await foundRadioButton.isChecked();
-          
+        if (await cardRadioButton.isVisible({ timeout: 2000 })) {
+          const isChecked = await cardRadioButton.isChecked();
           if (!isChecked) {
-            await foundRadioButton.check();
-            logger.info(`Credit card radio button selected with selector: ${usedSelector}`);
-            
-            // Verifica che sia stato effettivamente selezionato
-            await page.waitForTimeout(1000);
-            const nowChecked = await foundRadioButton.isChecked();
-            logger.info('Radio button now checked:', nowChecked);
-          } else {
-            logger.info(`Credit card radio button already selected: ${usedSelector}`);
+            await cardRadioButton.check();
+            logger.info('Credit card option selected');
           }
-        } else {
-          throw new Error(`Radio button not visible or enabled: visible=${isVisible}, enabled=${isEnabled}`);
         }
-        
-        // IMPORTANTE: Aspettare che i campi della carta di credito si carichino
-        logger.info('Waiting for credit card fields to appear after selecting payment method...');
-        await page.waitForTimeout(3000);
-        await captureScreenshot(page, 'after-payment-method-selected');
-        
-        // 3. Fill credit card details if provided
-        if (bookingData.cardNumber && !testMode) {
-          const cardSelectors = [
-            BOOKING_COMPLETION_SELECTORS.cardNumber,
-            'input[name*="card"][name*="number"]',
-            'input[placeholder*="card"][placeholder*="number"]',
-            '#cardNumber',
-            '.card-number input'
-          ];
-          
-          for (const selector of cardSelectors) {
-            try {
-              const cardField = await page.locator(selector).first();
-              if (await cardField.isVisible({ timeout: 2000 })) {
-                await cardField.fill(bookingData.cardNumber);
-                logger.info('Card number filled');
-                break;
-              }
-            } catch (e) {
-              continue;
-            }
+
+        if (await termsCheckbox.isVisible({ timeout: 2000 })) {
+          const isTermsChecked = await termsCheckbox.isChecked();
+          if (!isTermsChecked) {
+            await termsCheckbox.check();
+            logger.info('Terms and conditions accepted');
           }
-          
-          // Card expiry
-          if (bookingData.cardExpiry) {
-            const expirySelectors = [
-              BOOKING_COMPLETION_SELECTORS.cardExpiry,
-              'input[name*="expir"]',
-              'input[placeholder*="MM/YY"]',
-              '#cardExpiry'
-            ];
-            
-            for (const selector of expirySelectors) {
-              try {
-                const expiryField = await page.locator(selector).first();
-                if (await expiryField.isVisible({ timeout: 2000 })) {
-                  await expiryField.fill(bookingData.cardExpiry);
-                  logger.info('Card expiry filled');
-                  break;
-                }
-              } catch (e) {
-                continue;
-              }
-            }
-          }
-          
-          // CVV
-          if (bookingData.cvv) {
-            const cvvSelectors = [
-              BOOKING_COMPLETION_SELECTORS.cardCvv,
-              'input[name*="cvv"]',
-              'input[name*="cvc"]',
-              'input[placeholder*="CVV"]',
-              '#cvv'
-            ];
-            
-            for (const selector of cvvSelectors) {
-              try {
-                const cvvField = await page.locator(selector).first();
-                if (await cvvField.isVisible({ timeout: 2000 })) {
-                  await cvvField.fill(bookingData.cvv);
-                  logger.info('CVV filled');
-                  break;
-                }
-              } catch (e) {
-                continue;
-              }
-            }
-          }
-          
-          // Card holder name
-          if (bookingData.cardHolder) {
-            const holderSelectors = [
-              BOOKING_COMPLETION_SELECTORS.cardHolder,
-              'input[name*="holder"]',
-              'input[placeholder*="nome"]',
-              '#cardHolder'
-            ];
-            
-            for (const selector of holderSelectors) {
-              try {
-                const holderField = await page.locator(selector).first();
-                if (await holderField.isVisible({ timeout: 2000 })) {
-                  await holderField.fill(bookingData.cardHolder);
-                  logger.info('Card holder filled');
-                  break;
-                }
-              } catch (e) {
-                continue;
-              }
-            }
-          }
-        } else {
-          logger.info('Test mode or no card details provided, skipping card fields');
         }
-        
+
+        const bookButton = await page.locator('button.GuaranteeDataCollectionPage_CTA').first();
+        if (await bookButton.isVisible({ timeout: 2000 })) {
+          await bookButton.click();
+          logger.info('Booking confirmed with Prenota button');
+        }
       } catch (error) {
-        logger.error('Error with credit card payment method:', error);
-        throw new Error('Failed to select credit card payment');
+        logger.error('Failed during payment selection or confirmation:', error);
+        throw new Error('Failed to process payment or confirm booking.');
       }
     } else if (paymentMethod === 'bank_transfer') {
       try {
@@ -1357,18 +1193,6 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
       }
     }
     
-    // 4. Accept terms and conditions (mandatory)
-    try {
-      await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.termsCheckbox, { timeout: 5000 });
-      const isChecked = await page.isChecked(BOOKING_COMPLETION_SELECTORS.termsCheckbox);
-      if (!isChecked) {
-        await page.check(BOOKING_COMPLETION_SELECTORS.termsCheckbox);
-        logger.info('Terms and conditions accepted');
-      }
-    } catch (error) {
-      logger.error('Could not find or check terms checkbox:', error);
-      throw new Error('Terms and conditions checkbox is required');
-    }
     
     // 5. Optionally subscribe to newsletter
     if (bookingData.acceptNewsletter) {
