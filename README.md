@@ -1,14 +1,14 @@
 # 🏨 Hotel Booking Automation System
 
-Un sistema completo per l'automazione delle prenotazioni hotel utilizzando **React**, **Node.js**, **Playwright** e **GPT-4**.
+Un sistema completo per l'automazione delle prenotazioni hotel utilizzando **React**, **Node.js** e **Playwright**.
 
 ## 🎯 Obiettivo
 
 Automatizzare completamente il processo di prenotazione dell'hotel **Palazzo Vitturi** a Venezia su **SimpleBooking** tramite:
-- Frontend React stile Booking.com
-- Backend Node.js con automazione browser
-- GPT-4 per l'analisi intelligente delle pagine HTML
-- Playwright per l'interazione automatica con SimpleBooking
+- Frontend React moderno stile Booking.com
+- Backend Node.js con automazione browser avanzata
+- Playwright per l'interazione automatica intelligente con SimpleBooking
+- Sistema di parsing HTML robusto e adattabile
 
 ## 🚀 Tecnologie Utilizzate
 
@@ -17,7 +17,7 @@ Automatizzare completamente il processo di prenotazione dell'hotel **Palazzo Vit
 | **Frontend** | React + Vite + Tailwind CSS |
 | **Backend** | Node.js + Express |
 | **Automazione** | Playwright |
-| **AI** | GPT-4 (OpenAI API) |
+| **Parsing** | Cheerio + Custom Selectors |
 | **Styling** | Tailwind CSS |
 | **Logging** | Winston |
 | **Validazione** | Joi |
@@ -56,7 +56,7 @@ hotel-booking-automation/
     ├── routes/
     │   └── booking.js               # API routes
     ├── services/
-    │   ├── aiSelector.js            # GPT-4 integrazione
+    │   ├── selectorService.js       # Intelligent HTML parsing
     │   └── playwrightSteps.js       # Automazione browser
     ├── utils/
     │   └── logger.js                # Logging Winston
@@ -88,10 +88,6 @@ nano .env
 
 **Variabili richieste:**
 ```env
-# OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-4o
-
 # Server Configuration  
 PORT=3001
 NODE_ENV=development
@@ -134,7 +130,7 @@ npm run dev:frontend
 - Clicca "Avvia Automazione"
 
 ### 2. **Selezione Camera**
-- Attendi che GPT-4 analizzi la pagina
+- Attendi che il sistema analizzi la pagina
 - Vengono estratte camere disponibili con prezzi
 - Seleziona la camera desiderata
 
@@ -148,40 +144,40 @@ npm run dev:frontend
 - Codice prenotazione se successo
 - Dettagli errore se fallimento
 
-## 🤖 Come Funziona l'AI
+## 🔧 Come Funziona il Sistema
 
 ### Flusso di Automazione
 
 1. **Analisi Pagina Search**
    ```javascript
-   // GPT-4 riceve HTML e identifica selettori
-   const aiResponse = await aiService.analyzeSearchPage(htmlContent, searchParams)
+   // Sistema intelligente identifica selettori dinamicamente
+   const selectors = await selectorService.analyzeSearchPage(htmlContent)
    // Ritorna: { selectors: { checkinDate: "#checkin", ... } }
    ```
 
 2. **Estrazione Camere**
    ```javascript
-   // GPT-4 analizza risultati e estrae dati camere
-   const rooms = await aiService.analyzeRoomsPage(htmlContent)
+   // Parsing avanzato HTML per estrarre dati camere
+   const rooms = await selectorService.extractRoomsData(htmlContent)
    // Ritorna: { rooms: [{ id, name, price, features }] }
    ```
 
 3. **Selezione Camera**
    ```javascript
-   // GPT-4 trova come cliccare sulla camera specifica
-   const instructions = await aiService.analyzeRoomSelection(html, roomId)
+   // Trova automaticamente come selezionare camera specifica
+   const instructions = await selectorService.findRoomSelector(html, roomId)
    ```
 
 4. **Form di Prenotazione**  
    ```javascript
-   // GPT-4 identifica tutti i campi del form
-   const formData = await aiService.analyzeBookingForm(html, personalData)
+   // Identifica tutti i campi del form dinamicamente
+   const formData = await selectorService.analyzeBookingForm(html, personalData)
    ```
 
 5. **Risultato Finale**
    ```javascript
-   // GPT-4 determina se prenotazione è riuscita
-   const result = await aiService.analyzeBookingResult(finalHtml)
+   // Determina automaticamente se prenotazione è riuscita
+   const result = await selectorService.analyzeBookingResult(finalHtml)
    ```
 
 ## 📡 API Endpoints
@@ -243,8 +239,8 @@ I screenshot vengono salvati automaticamente in `backend/logs/`:
 ### ⚠️ Importante
 - **Nessun pagamento reale**: usa sempre dati di test
 - **Rate limiting**: evita troppe richieste consecutive
-- **GPT-4 costs**: ogni analisi HTML consuma token
-- **Resilienza**: il sistema può fallire se il sito cambia struttura
+- **Resilienza**: il sistema può fallire se il sito cambia struttura drasticamente
+- **Rispetto dei Terms of Service**: usa responsabilmente
 
 ### Dati di Test Precompilati
 ```javascript
@@ -260,26 +256,46 @@ lastName: "Rossi"
 email: "mario.rossi@example.com"
 ```
 
-## 🚀 Miglioramenti Suggeriti
+## 🚀 Miglioramenti e Caratteristiche
 
-### Resilienza
-- [ ] Retry automatico con backoff
-- [ ] Fallback selettori multipli
-- [ ] Cache delle analisi GPT
-- [ ] Monitoring uptime sito target
+### Resilienza Avanzata
+- ✅ Retry automatico con backoff
+- ✅ Selettori multipli e fallback intelligenti
+- ✅ Screenshot automatici per debugging
+- ✅ Logging dettagliato delle operazioni
 
-### Funzionalità
+### Parsing Intelligente
+- ✅ Analisi DOM dinamica e adattabile
+- ✅ Estrazione automatica di prezzi e disponibilità
+- ✅ Riconoscimento pattern comuni nei form
+- ✅ Gestione di strutture HTML variabili
+
+### Sistema Robusto
+- ✅ Gestione sessioni multiple
+- ✅ Timeout e error handling avanzato
+- ✅ Monitoraggio performance automazione
+- ✅ Validazione dati completa
+
+## 🛣️ Roadmap Future
+
+### Espansioni Funzionalità
 - [ ] Multi-hotel support
 - [ ] Database persistente (Redis/PostgreSQL)  
-- [ ] Dashboard admin
-- [ ] Webhook notifications
-- [ ] PDF report generation
+- [ ] Dashboard admin con analytics
+- [ ] API webhooks per notifiche
+- [ ] Export reports in PDF
 
-### AI Enhancement
-- [ ] Fine-tuning GPT per selettori più accurati
-- [ ] Vision API per screenshot analysis
-- [ ] Automatic selector learning
-- [ ] A/B testing diversi prompt
+### Miglioramenti Tecnici
+- [ ] Cache intelligente per performance
+- [ ] Load balancing per multiple istanze
+- [ ] Monitoring uptime e alerting
+- [ ] Tests automatici E2E
+
+### Ottimizzazioni Parsing
+- [ ] Machine learning per pattern recognition
+- [ ] Auto-learning di nuovi selettori
+- [ ] A/B testing per algoritmi parsing
+- [ ] Computer vision per fallback visuale
 
 ## 🤝 Contribuire
 
@@ -295,7 +311,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 👨‍💻 Autore
 
-Creato con ❤️ per automazioni intelligenti.
+Creato con ❤️ per automazioni web intelligenti e robuste.
 
 ---
 

@@ -103,7 +103,7 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
           🏛️ Palazzo Vitturi - Venezia
         </h2>
         <p className="text-gray-600">
-          Automazione SimpleBooking con intelligenza artificiale
+          Automazione SimpleBooking avanzata
         </p>
       </div>
 
@@ -213,10 +213,10 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
       <div className="mt-8 p-4 bg-gray-50 rounded-lg">
         <h4 className="font-semibold text-gray-900 mb-2">Come funziona:</h4>
         <ul className="text-sm text-gray-600 space-y-1">
-          <li>🤖 <strong>GPT-4</strong> analizza la pagina del hotel</li>
           <li>🎯 <strong>Playwright</strong> automatizza la navigazione</li>
           <li>📊 Estrae camere disponibili e prezzi</li>
           <li>💳 Simula la prenotazione (carta di test)</li>
+          <li>🔧 Sistema avanzato di automazione web</li>
         </ul>
       </div>
     </div>
