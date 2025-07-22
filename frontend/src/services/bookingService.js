@@ -101,7 +101,63 @@ export const bookingService = {
   },
 
   /**
-   * Submit booking with personal data
+   * Fill personal data on the booking form
+   * @param {string} sessionId - Session identifier
+   * @param {Object} personalData - Personal data only
+   * @returns {Promise<Object>} Fill result
+   */
+  async fillPersonalData(sessionId, personalData) {
+    try {
+      const response = await api.post('/fill-personal-data', {
+        sessionId,
+        personalData: {
+          firstName: personalData.firstName,
+          lastName: personalData.lastName,
+          email: personalData.email,
+          acceptNewsletter: personalData.acceptNewsletter || false
+        }
+      })
+      
+      return response
+    } catch (error) {
+      console.error('Error filling personal data:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Complete booking with payment data
+   * @param {string} sessionId - Session identifier
+   * @param {Object} bookingData - Complete booking data including payment
+   * @param {boolean} testMode - Whether to run in test mode (default: false for real payments)
+   * @returns {Promise<Object>} Booking result
+   */
+  async completeBooking(sessionId, bookingData, testMode = false) {
+    try {
+      const response = await api.post('/complete-booking', {
+        sessionId,
+        bookingData: {
+          email: bookingData.email,
+          phone: bookingData.phone,
+          paymentMethod: 'credit_card',
+          cardNumber: bookingData.cardNumber?.replace(/\s/g, ''), // Remove spaces
+          cardExpiry: bookingData.cardExpiry,
+          cvv: bookingData.cvv,
+          cardHolder: bookingData.cardHolder,
+          acceptNewsletter: bookingData.acceptNewsletter || false
+        },
+        testMode
+      })
+      
+      return response
+    } catch (error) {
+      console.error('Error completing booking:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Submit booking with personal data (DEPRECATED - use fillPersonalData + completeBooking instead)
    * @param {string} sessionId - Session identifier
    * @param {string} roomId - Selected room identifier
    * @param {Object} personalData - Personal and payment information
@@ -109,22 +165,29 @@ export const bookingService = {
    */
   async submitBooking(sessionId, roomId, personalData) {
     try {
-      const response = await api.post('/submit-booking', {
-        sessionId,
-        roomId,
-        personalData: {
-          firstName: personalData.firstName,
-          lastName: personalData.lastName,
-          email: personalData.email,
-          phone: personalData.phone,
-          cardNumber: personalData.cardNumber.replace(/\s/g, ''), // Remove spaces
-          expiryMonth: personalData.expiryMonth,
-          expiryYear: personalData.expiryYear,
-          cvv: personalData.cvv
-        }
-      })
+      // Step 1: Fill personal data
+      console.log('🔄 Step 1: Filling personal data...')
+      const personalDataResult = await this.fillPersonalData(sessionId, personalData)
       
-      return response
+      if (!personalDataResult.success) {
+        throw new Error('Failed to fill personal data')
+      }
+      
+      // Step 2: Complete booking with payment
+      console.log('🔄 Step 2: Completing booking with payment...')
+      const bookingData = {
+        email: personalData.email,
+        phone: personalData.phone,
+        cardNumber: personalData.cardNumber,
+        cardExpiry: `${personalData.expiryMonth}/${personalData.expiryYear.slice(-2)}`, // Convert to MM/YY
+        cvv: personalData.cvv,
+        cardHolder: `${personalData.firstName} ${personalData.lastName}`,
+        acceptNewsletter: personalData.acceptNewsletter || false
+      }
+      
+      const bookingResult = await this.completeBooking(sessionId, bookingData, false) // testMode: false for real payments
+      
+      return bookingResult
     } catch (error) {
       console.error('Error submitting booking:', error)
       throw error
