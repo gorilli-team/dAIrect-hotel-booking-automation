@@ -848,6 +848,7 @@ async function fillPersonalDataPage(page, personalData) {
     
     // 5. Accept privacy policy (mandatory)
     const privacySelectors = [
+      'input[id="_rid_"]', // Selettore specifico dall'HTML fornito
       'input[name="privacyPolicyAcceptance"]',
       'input[name="privacy"]',
       'input[type="checkbox"]', // Generic checkbox fallback
@@ -900,20 +901,19 @@ async function fillPersonalDataPage(page, personalData) {
     
     // 7. Click "Continua" button to proceed to payment page
     const continueSelectors = [
+      'button.CustomerDataCollectionPage_CTA.CTA', // Selettore specifico fornito dall'utente
       'button.CustomerDataCollectionPage_CTA',
-      'button:has-text("Continua")',
-      'button:has-text("CONTINUA")', 
-      'button:has-text("Procedi")',
-      'button:has-text("PROCEDI")',
+      '.CustomerDataCollectionPage_CTA.CTA',
       '.CustomerDataCollectionPage_CTA',
+      'button:has-text("Continua")',
+      'button:has-text("CONTINUA")', // Variante maiuscola
+      'a:has-text("Continua")', // Potrebbe essere un link
+      'input[value="Continua"]', // Potrebbe essere un input
+      '[class*="CTA"][class*="CustomerData"]', // Qualsiasi elemento con CTA e CustomerData
       'button[type="submit"]',
-      'input[type="submit"]',
-      '.CTA:has-text("Continua")',
-      '[class*="CTA"]:has-text("Continua")',
-      '[class*="Button"]:has-text("Continua")',
-      'a:has-text("Continua")',
-      'a.CTA',
-      'button', // Generic button as last fallback
+      'form button:last-of-type', // Ultimo bottone del form
+      '[role="button"]:has-text("Continua")', // Elemento con role button
+      '.CTA', // Generico CTA
     ];
     
     let continueClicked = false;
@@ -933,7 +933,79 @@ async function fillPersonalDataPage(page, personalData) {
     }
     
     if (!continueClicked) {
-      throw new Error('Could not find or click continue button');
+      // DEBUG AVANZATO: Analizziamo la pagina per capire cosa c'è
+      logger.error('Could not find continue button. Analyzing page content...');
+      
+      const pageTitle = await page.title();
+      const pageUrl = page.url();
+      const pageContent = await page.content();
+      
+      logger.info('DEBUG - Page analysis:', {
+        title: pageTitle,
+        url: pageUrl,
+        contentLength: pageContent.length,
+        hasForm: pageContent.includes('<form'),
+        hasButton: pageContent.includes('<button'),
+        hasContinua: pageContent.includes('Continua') || pageContent.includes('CONTINUA'),
+        hasCTA: pageContent.includes('CTA'),
+        hasCustomerData: pageContent.includes('CustomerData')
+      });
+      
+      // Cerca tutti i bottoni sulla pagina
+      const allButtons = await page.locator('button, input[type="button"], input[type="submit"], a[role="button"]').all();
+      logger.info(`Found ${allButtons.length} interactive elements on page`);
+      
+      for (let i = 0; i < Math.min(allButtons.length, 10); i++) { // Limita a 10 per non spammare i log
+        try {
+          const element = allButtons[i];
+          const tagName = await element.evaluate(el => el.tagName);
+          const text = await element.textContent().catch(() => '');
+          const className = await element.getAttribute('class').catch(() => '');
+          const id = await element.getAttribute('id').catch(() => '');
+          const type = await element.getAttribute('type').catch(() => '');
+          const visible = await element.isVisible();
+          
+          logger.info(`Button ${i}:`, {
+            tag: tagName,
+            text: text?.trim(),
+            class: className,
+            id: id,
+            type: type,
+            visible: visible
+          });
+        } catch (e) {
+          logger.debug(`Error inspecting button ${i}: ${e.message}`);
+        }
+      }
+      
+      // Prova a cercare elementi che contengono "Continua" nel testo
+      try {
+        const continuaElements = await page.locator(':has-text("Continua"), :has-text("CONTINUA")').all();
+        logger.info(`Found ${continuaElements.length} elements containing "Continua" text`);
+        
+        for (let i = 0; i < continuaElements.length; i++) {
+          try {
+            const element = continuaElements[i];
+            const tagName = await element.evaluate(el => el.tagName);
+            const text = await element.textContent().catch(() => '');
+            const className = await element.getAttribute('class').catch(() => '');
+            const visible = await element.isVisible();
+            
+            logger.info(`Continua element ${i}:`, {
+              tag: tagName,
+              text: text?.trim(),
+              class: className,
+              visible: visible
+            });
+          } catch (e) {
+            logger.debug(`Error inspecting continua element ${i}: ${e.message}`);
+          }
+        }
+      } catch (e) {
+        logger.warn('Error searching for Continua elements:', e.message);
+      }
+      
+      throw new Error('Could not find or click continue button after detailed analysis');
     }
     
     // Wait for navigation to payment page
@@ -964,35 +1036,216 @@ async function fillPersonalDataPage(page, personalData) {
 async function completeBookingWithRealSelectors(page, bookingData, testMode = false) {
   logger.info('Completing booking with real selectors', { 
     email: bookingData.email, 
-    testMode 
+    testMode
   });
   
   try {
     // Take initial screenshot
     await captureScreenshot(page, 'booking-completion-start');
     
-    // 1. Fill phone number if required
+    // 1. Fill phone number if required (campo cellulare)
     if (bookingData.phone) {
       try {
-        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.mobilePhone, { timeout: 5000 });
-        await page.fill(BOOKING_COMPLETION_SELECTORS.mobilePhone, bookingData.phone);
-        logger.info('Phone number filled');
+        // Prova i selettori specifici per il campo telefono (forniti dall'utente)
+        const phoneSelectors = [
+          'input[name="mobilePhone"]', // Selettore principale
+          'input#_rge_', // ID specifico dal HTML fornito dall'utente
+          'input[aria-describedby*="_rep_"]', // Backup con aria-describedby
+          '.PhoneNumberInputWrapper input[type="text"]' // Selettore container
+        ];
+        
+        let phoneField = null;
+        for (const selector of phoneSelectors) {
+          try {
+            phoneField = await page.waitForSelector(selector, { timeout: 2000 });
+            if (phoneField) {
+              logger.info(`Phone field found with selector: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (phoneField) {
+          await phoneField.fill(bookingData.phone);
+          logger.info('Phone number filled successfully');
+        } else {
+          logger.warn('Phone field not found with any selector');
+        }
       } catch (error) {
-        logger.warn('Phone field not found or already filled');
+        logger.warn('Phone field not found or already filled:', error.message);
       }
     }
     
-    // 2. Select payment method (default to credit card)
+    // 2. IMPORTANTE: Prima verifichiamo di essere sulla pagina corretta
+    logger.info('Checking current page URL and content...');
+    const currentUrl = page.url();
+    logger.info('Current URL:', currentUrl);
+    
+    // Prendiamo uno screenshot per debug
+    await captureScreenshot(page, 'before-payment-method-selection');
+    
+    // Verifichiamo se ci sono elementi di pagamento sulla pagina
+    const paymentPageElements = [
+      '.PaymentMethodsForm',
+      'input[name="paymentMethodId"]',
+      '.BookingMediumTypeContainer',
+      'h2:has-text("Scegli come garantire")',
+      '.GuaranteeDataCollectionPage'
+    ];
+    
+    let onPaymentPage = false;
+    for (const selector of paymentPageElements) {
+      try {
+        if (await page.isVisible(selector, { timeout: 2000 })) {
+          logger.info(`Found payment page element: ${selector}`);
+          onPaymentPage = true;
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    if (!onPaymentPage) {
+      logger.warn('Payment page elements not found. Taking screenshot for debugging...');
+      await captureScreenshot(page, 'not-on-payment-page');
+      
+      // DEBUG AVANZATO: Ottieni informazioni dettagliate sulla pagina
+      const pageTitle = await page.title();
+      const pageContent = await page.content();
+      const pageUrl = page.url();
+      
+      logger.info('DEBUG - Page details:', {
+        title: pageTitle,
+        url: pageUrl,
+        contentLength: pageContent.length,
+        hasFormTag: pageContent.includes('<form'),
+        hasInputTag: pageContent.includes('<input'),
+        hasRadioType: pageContent.includes('type="radio"'),
+        hasPaymentMethod: pageContent.includes('paymentMethod'),
+        hasCreditCard: pageContent.includes('credit') || pageContent.includes('carta')
+      });
+      
+      // Controlla tutti i form sulla pagina
+      const forms = await page.locator('form').all();
+      logger.info(`Found ${forms.length} forms on page`);
+      
+      for (let i = 0; i < forms.length; i++) {
+        try {
+          const formHTML = await forms[i].innerHTML();
+          logger.info(`Form ${i} contains radio inputs:`, {
+            hasRadio: formHTML.includes('type="radio"'),
+            hasPaymentMethod: formHTML.includes('paymentMethod'),
+            snippet: formHTML.substring(0, 200) + '...'
+          });
+        } catch (e) {
+          logger.debug(`Could not inspect form ${i}: ${e.message}`);
+        }
+      }
+      
+      // Proviamo ad aspettare un po' di più per il caricamento
+      await page.waitForTimeout(5000);
+      await captureScreenshot(page, 'after-additional-wait');
+    }
+    
+    // 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
     const paymentMethod = bookingData.paymentMethod || 'credit_card';
     
     if (paymentMethod === 'credit_card') {
       try {
-        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.creditCardRadio, { timeout: 5000 });
-        await page.check(BOOKING_COMPLETION_SELECTORS.creditCardRadio);
-        logger.info('Credit card payment method selected');
+        // Prima aspettiamo che almeno uno dei radio button sia presente
+        const radioButtonSelectors = [
+          'input[name="paymentMethodId"][value="104"]', // Selettore principale
+          'input#_ret_', // ID specifico dal HTML
+          'input[type="radio"][value="104"]', // Backup con type radio
+          '.RadioInput input[value="104"]', // Container specifico
+          'input[aria-describedby="_reu_"]', // Backup con aria-describedby
+          'input[name="paymentMethodId"]' // Qualsiasi radio per pagamento
+        ];
         
-        // Wait for credit card fields to appear (they might load dynamically)
-        await page.waitForTimeout(2000);
+        logger.info('Waiting for payment method radio buttons to appear...');
+        let foundRadioButton = null;
+        let usedSelector = null;
+        
+        // Prima cerchiamo di trovare almeno un radio button con timeout più lungo
+        for (const selector of radioButtonSelectors) {
+          try {
+            logger.info(`Trying to find radio button with selector: ${selector}`);
+            await page.waitForSelector(selector, { timeout: 15000 }); // Timeout aumentato a 15 secondi
+            foundRadioButton = page.locator(selector).first();
+            usedSelector = selector;
+            logger.info(`Found radio button with selector: ${selector}`);
+            break;
+          } catch (e) {
+            logger.debug(`Radio selector ${selector} not found: ${e.message}`);
+            continue;
+          }
+        }
+        
+        if (!foundRadioButton) {
+          logger.error('No payment method radio buttons found. Taking debug screenshot...');
+          await captureScreenshot(page, 'no-radio-buttons-found');
+          
+          // Proviamo a trovare qualsiasi input radio sulla pagina
+          const allRadios = await page.locator('input[type="radio"]').all();
+          logger.info(`Found ${allRadios.length} radio buttons on page`);
+          
+          for (let i = 0; i < allRadios.length; i++) {
+            try {
+              const radioInfo = {
+                index: i,
+                name: await allRadios[i].getAttribute('name'),
+                value: await allRadios[i].getAttribute('value'),
+                id: await allRadios[i].getAttribute('id'),
+                visible: await allRadios[i].isVisible()
+              };
+              logger.info(`Radio button ${i}:`, radioInfo);
+            } catch (e) {
+              logger.debug(`Error inspecting radio ${i}: ${e.message}`);
+            }
+          }
+          
+          throw new Error('No payment method radio buttons found on page');
+        }
+        
+        // Ora tentiamo di selezionare il radio button
+        logger.info('Attempting to select credit card payment method...');
+        
+        // Verifica se è visibile e selezionabile
+        const isVisible = await foundRadioButton.isVisible({ timeout: 3000 });
+        const isEnabled = await foundRadioButton.isEnabled();
+        
+        logger.info('Radio button state:', { 
+          selector: usedSelector, 
+          visible: isVisible, 
+          enabled: isEnabled 
+        });
+        
+        if (isVisible && isEnabled) {
+          // Controlla se è già selezionato
+          const isChecked = await foundRadioButton.isChecked();
+          
+          if (!isChecked) {
+            await foundRadioButton.check();
+            logger.info(`Credit card radio button selected with selector: ${usedSelector}`);
+            
+            // Verifica che sia stato effettivamente selezionato
+            await page.waitForTimeout(1000);
+            const nowChecked = await foundRadioButton.isChecked();
+            logger.info('Radio button now checked:', nowChecked);
+          } else {
+            logger.info(`Credit card radio button already selected: ${usedSelector}`);
+          }
+        } else {
+          throw new Error(`Radio button not visible or enabled: visible=${isVisible}, enabled=${isEnabled}`);
+        }
+        
+        // IMPORTANTE: Aspettare che i campi della carta di credito si carichino
+        logger.info('Waiting for credit card fields to appear after selecting payment method...');
+        await page.waitForTimeout(3000);
+        await captureScreenshot(page, 'after-payment-method-selected');
         
         // 3. Fill credit card details if provided
         if (bookingData.cardNumber && !testMode) {
@@ -1183,7 +1436,7 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
     await captureScreenshot(page, 'booking-result');
     
     // Try to detect success or failure from page content
-    const currentUrl = page.url();
+    const finalUrl = page.url();
     const pageContent = await page.content();
     
     // Look for success indicators
@@ -1230,7 +1483,7 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
                hasError ? 'Booking failed - payment or validation error' : 
                'Booking result unclear',
       bookingReference,
-      url: currentUrl,
+      url: finalUrl,
       timestamp: new Date().toISOString()
     };
     

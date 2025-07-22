@@ -806,6 +806,628 @@ router.post('/complete-booking', async (req, res) => {
   }
 });
 
+// POST /api/booking/analyze-current-page - Analyze what page we're currently on
+router.post('/analyze-current-page', async (req, res) => {
+  logger.info('Analyze current page endpoint called');
+  
+  const schema = Joi.object({
+    sessionId: Joi.string().required()
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.details
+    });
+  }
+
+  const { sessionId } = value;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  try {
+    logger.info('Analyzing current page', { sessionId });
+
+    // Take screenshot of current page
+    await session.page.screenshot({ 
+      path: `backend/logs/page-analysis-${sessionId}.png`,
+      fullPage: true
+    });
+
+    // Get basic page info
+    const currentUrl = session.page.url();
+    const pageTitle = await session.page.title();
+    
+    logger.info('Current page info:', {
+      url: currentUrl,
+      title: pageTitle
+    });
+
+    // Check for different page indicators
+    const pageIndicators = {
+      personalDataPage: [
+        'h2:has-text("Completa i tuoi dati")',
+        'h1:has-text("Completa i tuoi dati")',
+        '.CustomerDataCollectionPage',
+        'input[name="name"]',
+        'input[name="firstName"]'
+      ],
+      paymentPage: [
+        'h2:has-text("Scegli come garantire")',
+        '.PaymentMethodsForm',
+        'input[name="paymentMethodId"]',
+        '.GuaranteeDataCollectionPage'
+      ],
+      searchPage: [
+        '.RoomResultBlock',
+        '.SearchWidget',
+        'button:has-text("Info e prenota")'
+      ],
+      confirmationPage: [
+        'h2:has-text("Conferma prenotazione")',
+        'h1:has-text("Prenotazione confermata")',
+        '.BookingConfirmation'
+      ]
+    };
+    
+    let currentPageType = 'unknown';
+    let foundIndicators = [];
+    
+    for (const [pageType, selectors] of Object.entries(pageIndicators)) {
+      for (const selector of selectors) {
+        try {
+          if (await session.page.isVisible(selector, { timeout: 1000 })) {
+            currentPageType = pageType;
+            foundIndicators.push({ pageType, selector, found: true });
+            logger.info(`Found ${pageType} indicator: ${selector}`);
+          }
+        } catch (e) {
+          // Indicator not found, continue
+        }
+      }
+    }
+    
+    // Get all form elements on the page
+    const allInputs = await session.page.locator('input').all();
+    const inputInfo = [];
+    
+    for (let i = 0; i < Math.min(allInputs.length, 20); i++) {
+      try {
+        const input = allInputs[i];
+        const type = await input.getAttribute('type');
+        const name = await input.getAttribute('name');
+        const id = await input.getAttribute('id');
+        const placeholder = await input.getAttribute('placeholder');
+        const visible = await input.isVisible();
+        const checked = type === 'checkbox' ? await input.isChecked() : null;
+        
+        inputInfo.push({
+          index: i,
+          type,
+          name,
+          id,
+          placeholder,
+          visible,
+          checked
+        });
+      } catch (e) {
+        // Skip this input
+      }
+    }
+    
+    // Get all buttons on the page
+    const allButtons = await session.page.locator('button, input[type="button"], input[type="submit"], a[role="button"]').all();
+    const buttonInfo = [];
+    
+    for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+      try {
+        const button = allButtons[i];
+        const tagName = await button.evaluate(el => el.tagName);
+        const text = await button.textContent().catch(() => '');
+        const className = await button.getAttribute('class').catch(() => '');
+        const id = await button.getAttribute('id').catch(() => '');
+        const visible = await button.isVisible();
+        const enabled = await button.isEnabled();
+        
+        buttonInfo.push({
+          index: i,
+          tag: tagName,
+          text: text?.trim(),
+          class: className,
+          id: id,
+          visible: visible,
+          enabled: enabled
+        });
+      } catch (e) {
+        // Skip this button
+      }
+    }
+    
+    // Check for privacy checkbox specifically if we're on personal data page
+    let privacyCheckboxInfo = null;
+    if (currentPageType === 'personalDataPage' || currentPageType === 'unknown') {
+      const privacySelectors = [
+        'input[name="privacyPolicyAcceptance"]',
+        'input[name="privacy"]',
+        'input[type="checkbox"]'
+      ];
+      
+      for (const selector of privacySelectors) {
+        try {
+          const checkbox = await session.page.waitForSelector(selector, { timeout: 2000 });
+          if (checkbox) {
+            const isVisible = await checkbox.isVisible();
+            const isEnabled = await checkbox.isEnabled();
+            const isChecked = await checkbox.isChecked();
+            const name = await checkbox.getAttribute('name');
+            const id = await checkbox.getAttribute('id');
+            
+            privacyCheckboxInfo = {
+              selector,
+              visible: isVisible,
+              enabled: isEnabled,
+              checked: isChecked,
+              name,
+              id
+            };
+            
+            logger.info('Privacy checkbox found:', privacyCheckboxInfo);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+    
+    const result = {
+      success: true,
+      currentUrl,
+      pageTitle,
+      currentPageType,
+      foundIndicators,
+      totalInputsFound: allInputs.length,
+      inputInfo,
+      totalButtonsFound: allButtons.length,
+      buttonInfo,
+      privacyCheckboxInfo,
+      sessionCurrentStep: session.currentStep,
+      message: `Currently on ${currentPageType} page`
+    };
+    
+    logger.info('Page analysis result:', result);
+    
+    res.json(result);
+
+  } catch (error) {
+    logger.error('Error in analyze-current-page endpoint:', error);
+    
+    // Take error screenshot
+    await session.page.screenshot({ 
+      path: `backend/logs/page-analysis-error-${sessionId}.png`,
+      fullPage: true
+    });
+    
+    res.status(500).json({
+      error: 'Failed to analyze current page',
+      details: error.message,
+      sessionId
+    });
+  }
+});
+
+// POST /api/booking/test-privacy-checkbox - Test privacy policy checkbox in personal data page
+router.post('/test-privacy-checkbox', async (req, res) => {
+  logger.info('Test privacy checkbox endpoint called');
+  
+  const schema = Joi.object({
+    sessionId: Joi.string().required()
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.details
+    });
+  }
+
+  const { sessionId } = value;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  try {
+    logger.info('Testing privacy checkbox and page state', { sessionId });
+
+    // Take screenshot of current page
+    await session.page.screenshot({ 
+      path: `backend/logs/privacy-test-start-${sessionId}.png`,
+      fullPage: true
+    });
+
+    // Get current page info
+    const currentUrl = session.page.url();
+    const pageTitle = await session.page.title();
+    
+    logger.info('Current page info:', {
+      url: currentUrl,
+      title: pageTitle
+    });
+
+    // Check if we're on the personal data page
+    const personalDataPageIndicators = [
+      'h2:has-text("Completa i tuoi dati")',
+      'h1:has-text("Completa i tuoi dati")',
+      '.CustomerDataCollectionPage',
+      'input[name="name"]',
+      'input[name="firstName"]',
+      'input[type="email"]'
+    ];
+    
+    let onPersonalDataPage = false;
+    let foundIndicator = null;
+    
+    for (const selector of personalDataPageIndicators) {
+      try {
+        if (await session.page.isVisible(selector, { timeout: 2000 })) {
+          logger.info(`Found personal data page indicator: ${selector}`);
+          onPersonalDataPage = true;
+          foundIndicator = selector;
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // Get all form fields on the page
+    const allInputs = await session.page.locator('input').all();
+    const inputInfo = [];
+    
+    for (let i = 0; i < allInputs.length; i++) {
+      try {
+        const input = allInputs[i];
+        const type = await input.getAttribute('type');
+        const name = await input.getAttribute('name');
+        const id = await input.getAttribute('id');
+        const placeholder = await input.getAttribute('placeholder');
+        const visible = await input.isVisible();
+        const checked = type === 'checkbox' ? await input.isChecked() : null;
+        
+        inputInfo.push({
+          index: i,
+          type,
+          name,
+          id,
+          placeholder,
+          visible,
+          checked
+        });
+      } catch (e) {
+        // Skip this input
+      }
+    }
+    
+    // Look specifically for privacy policy checkbox
+    const privacySelectors = [
+      'input[name="privacyPolicyAcceptance"]',
+      'input[name="privacy"]',
+      'input[type="checkbox"]', // Generic checkbox
+      'input[id*="privacy"]',
+      'input[id*="Privacy"]'
+    ];
+    
+    let privacyCheckboxFound = false;
+    let privacyCheckboxInfo = null;
+    let usedPrivacySelector = null;
+    
+    for (const selector of privacySelectors) {
+      try {
+        logger.info(`Trying privacy checkbox selector: ${selector}`);
+        const checkbox = await session.page.waitForSelector(selector, { timeout: 3000 });
+        if (checkbox) {
+          const isVisible = await checkbox.isVisible();
+          const isEnabled = await checkbox.isEnabled();
+          const isChecked = await checkbox.isChecked();
+          const name = await checkbox.getAttribute('name');
+          const id = await checkbox.getAttribute('id');
+          
+          privacyCheckboxInfo = {
+            selector,
+            visible: isVisible,
+            enabled: isEnabled,
+            checked: isChecked,
+            name,
+            id
+          };
+          
+          logger.info('Privacy checkbox found:', privacyCheckboxInfo);
+          
+          if (isVisible && isEnabled) {
+            if (!isChecked) {
+              await checkbox.check();
+              const nowChecked = await checkbox.isChecked();
+              logger.info(`Privacy checkbox checked. Status: ${nowChecked}`);
+              privacyCheckboxInfo.checkedAfterAction = nowChecked;
+            } else {
+              logger.info('Privacy checkbox was already checked');
+              privacyCheckboxInfo.checkedAfterAction = true;
+            }
+            
+            privacyCheckboxFound = true;
+            usedPrivacySelector = selector;
+            break;
+          } else {
+            logger.warn(`Privacy checkbox found but not interactable: visible=${isVisible}, enabled=${isEnabled}`);
+          }
+        }
+      } catch (e) {
+        logger.debug(`Privacy selector ${selector} failed: ${e.message}`);
+        continue;
+      }
+    }
+    
+    // Look for Continue button and check if it's enabled
+    const continueSelectors = [
+      'button.CustomerDataCollectionPage_CTA.CTA',
+      'button.CustomerDataCollectionPage_CTA',
+      '.CustomerDataCollectionPage_CTA.CTA',
+      '.CustomerDataCollectionPage_CTA',
+      'button:has-text("Continua")',
+      'button[type="submit"]'
+    ];
+    
+    let continueButtonInfo = null;
+    
+    for (const selector of continueSelectors) {
+      try {
+        const button = await session.page.waitForSelector(selector, { timeout: 2000 });
+        if (button) {
+          const isVisible = await button.isVisible();
+          const isEnabled = await button.isEnabled();
+          const text = await button.textContent();
+          
+          continueButtonInfo = {
+            selector,
+            visible: isVisible,
+            enabled: isEnabled,
+            text: text?.trim()
+          };
+          
+          logger.info('Continue button found:', continueButtonInfo);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // Take screenshot after checking/attempting to check privacy
+    await session.page.screenshot({ 
+      path: `backend/logs/privacy-test-after-${sessionId}.png`,
+      fullPage: true
+    });
+    
+    const result = {
+      success: privacyCheckboxFound,
+      onPersonalDataPage,
+      foundIndicator,
+      currentUrl,
+      pageTitle,
+      privacyCheckboxFound,
+      privacyCheckboxInfo,
+      usedPrivacySelector,
+      continueButtonInfo,
+      totalInputsFound: allInputs.length,
+      inputInfo,
+      message: privacyCheckboxFound ? 
+        'Privacy checkbox found and processed' : 
+        'Privacy checkbox not found - this might be why Continue button does not work'
+    };
+    
+    logger.info('Privacy checkbox test result:', result);
+    
+    res.json(result);
+
+  } catch (error) {
+    logger.error('Error in test-privacy-checkbox endpoint:', error);
+    
+    // Take error screenshot
+    await session.page.screenshot({ 
+      path: `backend/logs/privacy-test-error-${sessionId}.png`,
+      fullPage: true
+    });
+    
+    res.status(500).json({
+      error: 'Failed to test privacy checkbox',
+      details: error.message,
+      sessionId
+    });
+  }
+});
+
+// POST /api/booking/test-phone-field - Test only phone field without radio buttons
+router.post('/test-phone-field', async (req, res) => {
+  logger.info('Test phone field endpoint called');
+  
+  const schema = Joi.object({
+    sessionId: Joi.string().required(),
+    phone: Joi.string().required()
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.details
+    });
+  }
+
+  const { sessionId, phone } = value;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  try {
+    logger.info('Testing phone field only', {
+      sessionId,
+      phone
+    });
+
+    // Take screenshot of current page
+    await session.page.screenshot({ 
+      path: `backend/logs/phone-test-start-${sessionId}.png`,
+      fullPage: true
+    });
+
+    // Get current page info
+    const currentUrl = session.page.url();
+    const pageTitle = await session.page.title();
+    
+    logger.info('Current page info:', {
+      url: currentUrl,
+      title: pageTitle
+    });
+
+    // Try to find and fill phone field
+    const phoneSelectors = [
+      'input[name="mobilePhone"]', // Selettore principale
+      'input#_rge_', // ID specifico dal HTML fornito dall'utente
+      'input[aria-describedby*="_rep_"]', // Backup con aria-describedby
+      '.PhoneNumberInputWrapper input[type="text"]', // Selettore container
+      'input[type="tel"]', // Generic phone input
+      'input[placeholder*="telefono"]', // Italian placeholder
+      'input[placeholder*="cellulare"]', // Italian mobile placeholder
+      'input[name*="phone"]', // Generic phone name
+      'input[id*="phone"]' // Generic phone id
+    ];
+    
+    let phoneFieldFound = false;
+    let usedSelector = null;
+    let phoneFieldInfo = null;
+    
+    for (const selector of phoneSelectors) {
+      try {
+        logger.info(`Trying phone selector: ${selector}`);
+        const phoneField = await session.page.waitForSelector(selector, { timeout: 3000 });
+        if (phoneField) {
+          // Get field info before filling
+          const isVisible = await phoneField.isVisible();
+          const isEnabled = await phoneField.isEnabled();
+          const currentValue = await phoneField.inputValue();
+          const placeholder = await phoneField.getAttribute('placeholder');
+          
+          phoneFieldInfo = {
+            selector,
+            visible: isVisible,
+            enabled: isEnabled,
+            currentValue,
+            placeholder
+          };
+          
+          logger.info('Phone field found:', phoneFieldInfo);
+          
+          if (isVisible && isEnabled) {
+            await phoneField.fill(phone);
+            const newValue = await phoneField.inputValue();
+            
+            logger.info(`Phone field filled successfully. New value: ${newValue}`);
+            phoneFieldFound = true;
+            usedSelector = selector;
+            phoneFieldInfo.newValue = newValue;
+            break;
+          } else {
+            logger.warn(`Phone field found but not interactable: visible=${isVisible}, enabled=${isEnabled}`);
+          }
+        }
+      } catch (e) {
+        logger.debug(`Phone selector ${selector} failed: ${e.message}`);
+        continue;
+      }
+    }
+    
+    // Also check what other input fields are available
+    const allInputs = await session.page.locator('input').all();
+    const inputInfo = [];
+    
+    for (let i = 0; i < Math.min(allInputs.length, 15); i++) { // Limit to first 15 inputs
+      try {
+        const input = allInputs[i];
+        const type = await input.getAttribute('type');
+        const name = await input.getAttribute('name');
+        const id = await input.getAttribute('id');
+        const placeholder = await input.getAttribute('placeholder');
+        const visible = await input.isVisible();
+        
+        inputInfo.push({
+          index: i,
+          type,
+          name,
+          id,
+          placeholder,
+          visible
+        });
+      } catch (e) {
+        // Skip this input
+      }
+    }
+    
+    // Take screenshot after attempt
+    await session.page.screenshot({ 
+      path: `backend/logs/phone-test-after-${sessionId}.png`,
+      fullPage: true
+    });
+    
+    const result = {
+      success: phoneFieldFound,
+      phoneFieldFound,
+      usedSelector,
+      phoneFieldInfo,
+      currentUrl,
+      pageTitle,
+      totalInputsFound: allInputs.length,
+      inputInfo,
+      message: phoneFieldFound ? 
+        'Phone field found and filled successfully' : 
+        'Phone field not found with any selector'
+    };
+    
+    logger.info('Phone field test result:', result);
+    
+    res.json(result);
+
+  } catch (error) {
+    logger.error('Error in test-phone-field endpoint:', error);
+    
+    // Take error screenshot
+    await session.page.screenshot({ 
+      path: `backend/logs/phone-test-error-${sessionId}.png`,
+      fullPage: true
+    });
+    
+    res.status(500).json({
+      error: 'Failed to test phone field',
+      details: error.message,
+      sessionId
+    });
+  }
+});
+
 // DELETE /api/booking/session/:sessionId
 router.delete('/session/:sessionId', async (req, res) => {
   const { sessionId } = req.params;

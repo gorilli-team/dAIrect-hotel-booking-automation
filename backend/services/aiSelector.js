@@ -514,39 +514,46 @@ const CUSTOMER_DATA_SELECTORS = {
 
 // Selettori per la pagina di completamento prenotazione (garantire la prenotazione)
 const BOOKING_COMPLETION_SELECTORS = {
-  // Campo numero di telefono
-  mobilePhone: 'input[name="mobilePhone"]',
-  mobilePhoneLabel: 'label[for*="mobilePhone"]',
+  // Campo numero di telefono - basato sulla struttura HTML reale
+  mobilePhone: 'input[name="mobilePhone"], input#_reo_',
+  mobilePhoneLabel: 'label[for="_reo_"]',
   
-  // Selettori per i metodi di pagamento
-  creditCardRadio: 'input[name="paymentMethodId"][value="104"]',
-  bankTransferRadio: 'input[name="paymentMethodId"][value="1"]',
+  // Selettori per i metodi di pagamento - IDs e valori specifici dalla pagina reale
+  creditCardRadio: 'input[name="paymentMethodId"][value="104"], input#_ret_',
+  bankTransferRadio: 'input[name="paymentMethodId"][value="1"], input#_rev_',
   
-  // Campi carta di credito (potrebbero essere dinamici o in iframe)
-  cardNumber: 'input[name="cardNumber"], input[id*="card"][id*="number"], .card-number input',
-  cardExpiry: 'input[name="cardExpiry"], input[id*="expir"], .card-expiry input',
-  cardCvv: 'input[name="cardCvv"], input[id*="cvv"], input[id*="cvc"], .card-cvv input',
-  cardHolder: 'input[name="cardHolder"], input[id*="holder"], .card-holder input',
+  // Campi carta di credito - nomi e IDs dalla struttura HTML reale
+  cardNumber: 'input[name="creditCard.number"], input#_rf7_',
+  cardHolder: 'input[name="creditCard.holder"], input#_rfa_', 
+  cardExpiry: 'input[name="creditCard.expiry"], input#_rfd_',
+  // CVV non presente nell'HTML fornito - manteniamo selettori generici come fallback
+  cardCvv: 'input[name="creditCard.cvv"], input[id*="cvv"], input[id*="cvc"], .card-cvv input',
   
-  // Checkbox accettazione condizioni (obbligatorio)
-  termsCheckbox: 'input[name="bookinkAndPrivacyPoliciesAcceptance"]',
-  termsLabel: 'label[for*="bookinkAndPrivacyPoliciesAcceptance"]',
+  // Checkbox accettazione condizioni (obbligatorio) - ID specifico
+  termsCheckbox: 'input[name="bookinkAndPrivacyPoliciesAcceptance"], input#_rf4_',
+  termsLabel: 'label[for="_rf4_"]',
   
-  // Checkbox newsletter (opzionale)
-  newsletterCheckbox: 'input[name="newsletterSubscription"]',
+  // Checkbox newsletter (opzionale) - ID specifico 
+  newsletterCheckbox: 'input[name="newsletterSubscription"], input#_rf1_',
+  newsletterLabel: 'label[for="_rf1_"]',
   
-  // Bottone finale prenotazione
-  finalBookingButton: 'button.GuaranteeDataCollectionPage_CTA, .GuaranteeDataCollectionPage_CTA, button:contains("Prenota")',
-  sidebarBookingButton: 'button.DesktopSidebar_CTA, .DesktopSidebar_CTA',
+  // Bottoni prenotazione - classe specifica dalla pagina reale
+  finalBookingButton: 'button.GuaranteeDataCollectionPage_CTA, button:contains("Prenota")',
+  sidebarBookingButton: 'button.DesktopSidebar_CTA',
+  
+  // Container del form di pagamento
+  paymentMethodsForm: '.PaymentMethodsForm, .e1qa5vpx2',
+  creditCardContainer: '.BookingMediumTypeContainer, .e1e67odw2',
+  creditCardInputSection: '.PaymentMethodInput, .e10m73qo7',
   
   // Indicatori di caricamento o successo
   loadingIndicator: '.loading, .spinner, [class*="loading"]',
   successMessage: '.success, .confirmation, [class*="success"], [class*="confirmation"]',
   errorMessage: '.error, .alert, [class*="error"], [class*="alert"]',
   
-  // Links alle condizioni
-  conditionsLink: '.sb-condition-popup-link',
-  privacyLink: '.sb-privacy-popup-link',
+  // Links alle condizioni - classi specifiche dalla pagina
+  conditionsLink: '.sb-condition-popup-link, a[role="button"]:contains("condizioni")',
+  privacyLink: '.sb-privacy-popup-link, a[role="button"]:contains("Privacy")',
   
   // Selettori per pagamento sicuro
   sslEncryption: '.SSLDataEncryption, .epts9b60',
