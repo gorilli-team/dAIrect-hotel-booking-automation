@@ -407,20 +407,89 @@ router.post('/select-room', async (req, res) => {
 
     logger.info(`Selecting room ${roomId} for session ${sessionId}`);
 
-    // Get current page HTML
-    const htmlContent = await session.page.content();
+    // Find the room in session data
+    const selectedRoom = session.availableRooms?.find(room => room.id === roomId);
+    if (!selectedRoom) {
+      return res.status(400).json({
+        error: 'Room not found',
+        message: 'Selected room ID not found in available rooms'
+      });
+    }
+
+    logger.info('Found room to select:', { 
+      name: selectedRoom.name, 
+      price: selectedRoom.price,
+      selector: selectedRoom.mainBookSelector
+    });
+
+    // Use direct selectors to click the "Info e prenota" or "Prenota" button
+    const selectors = [
+      selectedRoom.mainBookSelector, // Specific selector for this room
+      `button:nth-child(${roomId.split('-')[1]}) >> text="Info e prenota"`, // Fallback with room index
+      `button:nth-child(${roomId.split('-')[1]}) >> text="Prenota"`, // Fallback with "Prenota"
+      '.RoomCard_CTA', // Generic room booking button
+      '.ekc2wag2', // SimpleBooking specific class
+      'button:has-text("Info e prenota")', // Generic text search
+      'button:has-text("Prenota")', // Generic "Prenota" search
+    ];
+
+    let clicked = false;
+    let usedSelector = null;
+
+    for (const selector of selectors) {
+      if (!selector) continue;
+      
+      try {
+        logger.info(`Trying to click room selection with selector: ${selector}`);
+        
+        // Wait for selector and try to click
+        const element = await session.page.waitForSelector(selector, { timeout: 3000 });
+        if (element) {
+          await element.click();
+          clicked = true;
+          usedSelector = selector;
+          logger.info(`Successfully clicked room selection button with selector: ${selector}`);
+          break;
+        }
+      } catch (error) {
+        logger.debug(`Selector ${selector} failed: ${error.message}`);
+      }
+    }
+
+    if (!clicked) {
+      logger.error('Failed to click any room selection button');
+      return res.status(500).json({
+        error: 'Failed to select room',
+        message: 'Could not find or click room selection button'
+      });
+    }
+
+    // Wait for navigation to customer data page
+    logger.info('Waiting for navigation to customer data page...');
+    try {
+      await session.page.waitForNavigation({ 
+        waitUntil: 'domcontentloaded', 
+        timeout: 10000 
+      });
+      logger.info('Successfully navigated to customer data page');
+    } catch (error) {
+      logger.warn('Navigation timeout, checking current page content');
+    }
+
+    // Wait for customer data form to load
+    await session.page.waitForTimeout(2000);
     
-    // Ask GPT how to select this room
-    const selectionInstructions = await aiService.analyzeRoomSelection(htmlContent, roomId);
+    // Check if we're on customer data page by looking for form elements
+    const isCustomerDataPage = await session.page.isVisible(
+      'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")', 
+      { timeout: 5000 }
+    ).catch(() => false);
 
-    // Execute room selection
-    const selectionResult = await playwrightService.selectRoom(
-      session.page, 
-      selectionInstructions, 
-      roomId
-    );
+    if (!isCustomerDataPage) {
+      logger.warn('Not on customer data page yet, taking screenshot for debugging');
+    }
 
-    // Take screenshot
+    // Take screenshot for debugging
     await session.page.screenshot({ 
       path: `backend/logs/room-selected-${sessionId}.png`,
       fullPage: true
@@ -428,12 +497,19 @@ router.post('/select-room', async (req, res) => {
 
     // Update session
     session.selectedRoom = roomId;
+    session.selectedRoomData = selectedRoom;
     session.currentStep = 'personal-data';
 
     res.json({
       success: true,
       message: 'Room selected successfully',
-      data: selectionResult
+      data: {
+        roomId,
+        roomName: selectedRoom.name,
+        roomPrice: selectedRoom.price,
+        selector: usedSelector,
+        onCustomerDataPage: isCustomerDataPage
+      }
     });
 
   } catch (error) {
@@ -441,6 +517,101 @@ router.post('/select-room', async (req, res) => {
     res.status(500).json({
       error: 'Failed to select room',
       message: error.message
+    });
+  }
+});
+
+// POST /api/booking/fill-personal-data
+router.post('/fill-personal-data', async (req, res) => {
+  logger.info('Fill personal data endpoint called');
+  
+  const schema = Joi.object({
+    sessionId: Joi.string().uuid().required(),
+    personalData: Joi.object({
+      firstName: Joi.string().min(2).required(),
+      lastName: Joi.string().min(2).required(), 
+      email: Joi.string().email().required(),
+      acceptNewsletter: Joi.boolean().default(false)
+    }).required()
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.details
+    });
+  }
+
+  const { sessionId, personalData } = value;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  if (session.currentStep !== 'personal-data') {
+    return res.status(400).json({
+      error: 'Invalid step',
+      message: `Expected step 'personal-data', but current step is '${session.currentStep}'`
+    });
+  }
+
+  try {
+    logger.info('Filling personal data page', {
+      sessionId,
+      email: personalData.email,
+      firstName: personalData.firstName
+    });
+
+    // Call the new fillPersonalDataPage function
+    const fillResult = await playwrightService.fillPersonalDataPage(
+      session.page,
+      personalData
+    );
+
+    if (fillResult.success) {
+      // Update session to payment step
+      session.currentStep = 'payment';
+      session.personalDataFilled = true;
+      session.personalData = personalData;
+      session.updatedAt = new Date();
+      
+      logger.info('Personal data filled successfully, moved to payment step', {
+        sessionId,
+        email: personalData.email
+      });
+
+      res.json({
+        success: true,
+        sessionId,
+        message: 'Personal data filled and navigated to payment page',
+        currentStep: 'payment',
+        nextAction: 'Call /complete-booking to finalize the booking'
+      });
+    } else {
+      logger.error('Failed to fill personal data', {
+        sessionId,
+        error: fillResult.message
+      });
+      
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fill personal data',
+        details: fillResult.message,
+        sessionId
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error in fill-personal-data endpoint:', error);
+    
+    res.status(500).json({
+      error: 'Failed to fill personal data',
+      details: error.message,
+      sessionId
     });
   }
 });
@@ -544,6 +715,95 @@ router.get('/session/:sessionId/status', (req, res) => {
     availableRooms: session.availableRooms?.length || 0,
     selectedRoom: session.selectedRoom
   });
+});
+
+// POST /api/booking/complete-booking
+router.post('/complete-booking', async (req, res) => {
+  logger.info('Complete booking endpoint called');
+  
+  const schema = Joi.object({
+    sessionId: Joi.string().required(),
+    bookingData: Joi.object({
+      email: Joi.string().email().required(),
+      phone: Joi.string().optional(),
+      paymentMethod: Joi.string().valid('credit_card', 'bank_transfer').default('credit_card'),
+      cardNumber: Joi.string().optional(),
+      cardExpiry: Joi.string().optional(), // MM/YY format
+      cvv: Joi.string().optional(),
+      cardHolder: Joi.string().optional(),
+      acceptNewsletter: Joi.boolean().default(false)
+    }).required(),
+    testMode: Joi.boolean().default(false) // IMPORTANT: prevents actual payment
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      error: 'Invalid request data',
+      details: error.details
+    });
+  }
+
+  const { sessionId, bookingData, testMode } = value;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  try {
+    logger.info('Completing booking', {
+      sessionId,
+      email: bookingData.email,
+      paymentMethod: bookingData.paymentMethod,
+      testMode
+    });
+
+    // Call the completion function with real selectors
+    const completionResult = await playwrightService.completeBookingWithRealSelectors(
+      session.page,
+      bookingData,
+      testMode
+    );
+
+    // Update session
+    session.currentStep = 'booking_completed';
+    session.bookingResult = completionResult;
+    session.updatedAt = new Date();
+    
+    logger.info('Booking completion result:', {
+      sessionId,
+      success: completionResult.success,
+      message: completionResult.message,
+      testMode: completionResult.testMode || testMode
+    });
+
+    res.json({
+      success: true,
+      sessionId,
+      result: completionResult,
+      message: completionResult.success ? 
+        'Booking completed successfully' : 
+        'Booking completion failed',
+      testMode: completionResult.testMode || testMode
+    });
+
+  } catch (error) {
+    logger.error('Error in complete-booking endpoint:', error);
+    
+    // Update session with error
+    session.currentStep = 'booking_failed';
+    session.error = error.message;
+    session.updatedAt = new Date();
+    
+    res.status(500).json({
+      error: 'Failed to complete booking',
+      details: error.message,
+      sessionId
+    });
+  }
 });
 
 // DELETE /api/booking/session/:sessionId

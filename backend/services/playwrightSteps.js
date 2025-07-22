@@ -5,7 +5,8 @@ const {
   handleCookieConsent, 
   analyzeAvailabilityResults, 
   waitForAvailabilityResults,
-  AVAILABILITY_RESULTS_SELECTORS 
+  AVAILABILITY_RESULTS_SELECTORS,
+  BOOKING_COMPLETION_SELECTORS
 } = require('./aiSelector');
 
 let browserInstance;
@@ -753,6 +754,502 @@ async function executeSearchWithRealDOM(page, params) {
   }
 }
 
+// Funzione per compilare la prima pagina (dati personali)
+async function fillPersonalDataPage(page, personalData) {
+  logger.info('Filling personal data page', { email: personalData.email });
+  
+  try {
+    // Take initial screenshot
+    await captureScreenshot(page, 'personal-data-start');
+    
+    // 1. Fill first name
+    const firstNameSelectors = [
+      'input[name="name"]',
+      'input[name="firstName"]',
+      'input[id*="first"]',
+      'input[placeholder*="Nome"]'
+    ];
+    
+    for (const selector of firstNameSelectors) {
+      try {
+        const field = await page.locator(selector).first();
+        if (await field.isVisible({ timeout: 2000 })) {
+          await field.fill(personalData.firstName);
+          logger.info('First name filled with selector:', selector);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // 2. Fill last name
+    const lastNameSelectors = [
+      'input[name="lastName"]',
+      'input[name="surname"]',
+      'input[id*="last"]',
+      'input[placeholder*="Cognome"]'
+    ];
+    
+    for (const selector of lastNameSelectors) {
+      try {
+        const field = await page.locator(selector).first();
+        if (await field.isVisible({ timeout: 2000 })) {
+          await field.fill(personalData.lastName);
+          logger.info('Last name filled with selector:', selector);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // 3. Fill email
+    const emailSelectors = [
+      'input[name="email"]:first-of-type',
+      'input[type="email"]:first-of-type',
+      'input[id*="email"]:first-of-type',
+      'input[placeholder*="email"]'
+    ];
+    
+    for (const selector of emailSelectors) {
+      try {
+        const field = await page.locator(selector).first();
+        if (await field.isVisible({ timeout: 2000 })) {
+          await field.fill(personalData.email);
+          logger.info('Email filled with selector:', selector);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // 4. Fill email confirmation
+    const emailConfirmSelectors = [
+      'input[name="emailConfirm"]',
+      'input[type="email"]:nth-of-type(2)',
+      'input[placeholder*="conferma"]',
+      'input[placeholder*="Conferma"]'
+    ];
+    
+    for (const selector of emailConfirmSelectors) {
+      try {
+        const field = await page.locator(selector).first();
+        if (await field.isVisible({ timeout: 2000 })) {
+          await field.fill(personalData.email); // Same as email
+          logger.info('Email confirmation filled with selector:', selector);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // 5. Accept privacy policy (mandatory)
+    const privacySelectors = [
+      'input[name="privacyPolicyAcceptance"]',
+      'input[name="privacy"]',
+      'input[type="checkbox"]', // Generic checkbox fallback
+      'input[id*="privacy"]'
+    ];
+    
+    for (const selector of privacySelectors) {
+      try {
+        const checkbox = await page.locator(selector).first();
+        if (await checkbox.isVisible({ timeout: 2000 })) {
+          const isChecked = await checkbox.isChecked();
+          if (!isChecked) {
+            await checkbox.check();
+            logger.info('Privacy policy accepted with selector:', selector);
+          }
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    // 6. Optionally accept newsletter
+    if (personalData.acceptNewsletter) {
+      const newsletterSelectors = [
+        'input[name="newsletterSubscription"]',
+        'input[name="newsletter"]',
+        'input[id*="newsletter"]'
+      ];
+      
+      for (const selector of newsletterSelectors) {
+        try {
+          const checkbox = await page.locator(selector).first();
+          if (await checkbox.isVisible({ timeout: 2000 })) {
+            const isChecked = await checkbox.isChecked();
+            if (!isChecked) {
+              await checkbox.check();
+              logger.info('Newsletter accepted with selector:', selector);
+            }
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+    
+    // Take screenshot before clicking continue
+    await captureScreenshot(page, 'personal-data-filled');
+    
+    // 7. Click "Continua" button to proceed to payment page
+    const continueSelectors = [
+      'button.CustomerDataCollectionPage_CTA',
+      'button:has-text("Continua")',
+      'button:has-text("CONTINUA")', 
+      'button:has-text("Procedi")',
+      'button:has-text("PROCEDI")',
+      '.CustomerDataCollectionPage_CTA',
+      'button[type="submit"]',
+      'input[type="submit"]',
+      '.CTA:has-text("Continua")',
+      '[class*="CTA"]:has-text("Continua")',
+      '[class*="Button"]:has-text("Continua")',
+      'a:has-text("Continua")',
+      'a.CTA',
+      'button', // Generic button as last fallback
+    ];
+    
+    let continueClicked = false;
+    
+    for (const selector of continueSelectors) {
+      try {
+        const button = await page.locator(selector).first();
+        if (await button.isVisible({ timeout: 3000 })) {
+          await button.click();
+          logger.info('Continue button clicked with selector:', selector);
+          continueClicked = true;
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    if (!continueClicked) {
+      throw new Error('Could not find or click continue button');
+    }
+    
+    // Wait for navigation to payment page
+    logger.info('Waiting for navigation to payment page...');
+    await page.waitForTimeout(3000); // Wait for page transition
+    
+    // Take screenshot of payment page
+    await captureScreenshot(page, 'payment-page-loaded');
+    
+    return {
+      success: true,
+      message: 'Personal data filled and navigated to payment page'
+    };
+    
+  } catch (error) {
+    logger.error('Error filling personal data page:', error);
+    await captureScreenshot(page, 'personal-data-error');
+    
+    return {
+      success: false,
+      message: `Failed to fill personal data: ${error.message}`,
+      error: error.message
+    };
+  }
+}
+
+// Funzione per completare la prenotazione (pagina finale con carta di credito)
+async function completeBookingWithRealSelectors(page, bookingData, testMode = false) {
+  logger.info('Completing booking with real selectors', { 
+    email: bookingData.email, 
+    testMode 
+  });
+  
+  try {
+    // Take initial screenshot
+    await captureScreenshot(page, 'booking-completion-start');
+    
+    // 1. Fill phone number if required
+    if (bookingData.phone) {
+      try {
+        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.mobilePhone, { timeout: 5000 });
+        await page.fill(BOOKING_COMPLETION_SELECTORS.mobilePhone, bookingData.phone);
+        logger.info('Phone number filled');
+      } catch (error) {
+        logger.warn('Phone field not found or already filled');
+      }
+    }
+    
+    // 2. Select payment method (default to credit card)
+    const paymentMethod = bookingData.paymentMethod || 'credit_card';
+    
+    if (paymentMethod === 'credit_card') {
+      try {
+        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.creditCardRadio, { timeout: 5000 });
+        await page.check(BOOKING_COMPLETION_SELECTORS.creditCardRadio);
+        logger.info('Credit card payment method selected');
+        
+        // Wait for credit card fields to appear (they might load dynamically)
+        await page.waitForTimeout(2000);
+        
+        // 3. Fill credit card details if provided
+        if (bookingData.cardNumber && !testMode) {
+          const cardSelectors = [
+            BOOKING_COMPLETION_SELECTORS.cardNumber,
+            'input[name*="card"][name*="number"]',
+            'input[placeholder*="card"][placeholder*="number"]',
+            '#cardNumber',
+            '.card-number input'
+          ];
+          
+          for (const selector of cardSelectors) {
+            try {
+              const cardField = await page.locator(selector).first();
+              if (await cardField.isVisible({ timeout: 2000 })) {
+                await cardField.fill(bookingData.cardNumber);
+                logger.info('Card number filled');
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          // Card expiry
+          if (bookingData.cardExpiry) {
+            const expirySelectors = [
+              BOOKING_COMPLETION_SELECTORS.cardExpiry,
+              'input[name*="expir"]',
+              'input[placeholder*="MM/YY"]',
+              '#cardExpiry'
+            ];
+            
+            for (const selector of expirySelectors) {
+              try {
+                const expiryField = await page.locator(selector).first();
+                if (await expiryField.isVisible({ timeout: 2000 })) {
+                  await expiryField.fill(bookingData.cardExpiry);
+                  logger.info('Card expiry filled');
+                  break;
+                }
+              } catch (e) {
+                continue;
+              }
+            }
+          }
+          
+          // CVV
+          if (bookingData.cvv) {
+            const cvvSelectors = [
+              BOOKING_COMPLETION_SELECTORS.cardCvv,
+              'input[name*="cvv"]',
+              'input[name*="cvc"]',
+              'input[placeholder*="CVV"]',
+              '#cvv'
+            ];
+            
+            for (const selector of cvvSelectors) {
+              try {
+                const cvvField = await page.locator(selector).first();
+                if (await cvvField.isVisible({ timeout: 2000 })) {
+                  await cvvField.fill(bookingData.cvv);
+                  logger.info('CVV filled');
+                  break;
+                }
+              } catch (e) {
+                continue;
+              }
+            }
+          }
+          
+          // Card holder name
+          if (bookingData.cardHolder) {
+            const holderSelectors = [
+              BOOKING_COMPLETION_SELECTORS.cardHolder,
+              'input[name*="holder"]',
+              'input[placeholder*="nome"]',
+              '#cardHolder'
+            ];
+            
+            for (const selector of holderSelectors) {
+              try {
+                const holderField = await page.locator(selector).first();
+                if (await holderField.isVisible({ timeout: 2000 })) {
+                  await holderField.fill(bookingData.cardHolder);
+                  logger.info('Card holder filled');
+                  break;
+                }
+              } catch (e) {
+                continue;
+              }
+            }
+          }
+        } else {
+          logger.info('Test mode or no card details provided, skipping card fields');
+        }
+        
+      } catch (error) {
+        logger.error('Error with credit card payment method:', error);
+        throw new Error('Failed to select credit card payment');
+      }
+    } else if (paymentMethod === 'bank_transfer') {
+      try {
+        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.bankTransferRadio, { timeout: 5000 });
+        await page.check(BOOKING_COMPLETION_SELECTORS.bankTransferRadio);
+        logger.info('Bank transfer payment method selected');
+      } catch (error) {
+        logger.warn('Bank transfer option not found, continuing with credit card');
+      }
+    }
+    
+    // 4. Accept terms and conditions (mandatory)
+    try {
+      await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.termsCheckbox, { timeout: 5000 });
+      const isChecked = await page.isChecked(BOOKING_COMPLETION_SELECTORS.termsCheckbox);
+      if (!isChecked) {
+        await page.check(BOOKING_COMPLETION_SELECTORS.termsCheckbox);
+        logger.info('Terms and conditions accepted');
+      }
+    } catch (error) {
+      logger.error('Could not find or check terms checkbox:', error);
+      throw new Error('Terms and conditions checkbox is required');
+    }
+    
+    // 5. Optionally subscribe to newsletter
+    if (bookingData.acceptNewsletter) {
+      try {
+        await page.waitForSelector(BOOKING_COMPLETION_SELECTORS.newsletterCheckbox, { timeout: 3000 });
+        const isChecked = await page.isChecked(BOOKING_COMPLETION_SELECTORS.newsletterCheckbox);
+        if (!isChecked) {
+          await page.check(BOOKING_COMPLETION_SELECTORS.newsletterCheckbox);
+          logger.info('Newsletter subscription accepted');
+        }
+      } catch (error) {
+        logger.warn('Newsletter checkbox not found, continuing...');
+      }
+    }
+    
+    // Take screenshot before final submission
+    await captureScreenshot(page, 'before-final-booking');
+    
+    // 6. Submit booking (this will attempt real payment in production)
+    if (testMode) {
+      logger.info('TEST MODE: Would submit booking but stopping here for safety');
+      return {
+        success: true,
+        message: 'Test mode - booking form completed but not submitted',
+        testMode: true,
+        bookingReference: null
+      };
+    }
+    
+    logger.info('Proceeding with actual booking submission...');
+    
+    // Try both possible booking buttons
+    const bookingButtons = [
+      BOOKING_COMPLETION_SELECTORS.finalBookingButton,
+      BOOKING_COMPLETION_SELECTORS.sidebarBookingButton
+    ];
+    
+    let bookingSubmitted = false;
+    
+    for (const buttonSelector of bookingButtons) {
+      try {
+        const bookingButton = await page.locator(buttonSelector).first();
+        if (await bookingButton.isVisible({ timeout: 3000 })) {
+          await bookingButton.click();
+          logger.info('Booking submitted via button:', buttonSelector);
+          bookingSubmitted = true;
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    if (!bookingSubmitted) {
+      throw new Error('Could not find or click booking button');
+    }
+    
+    // 7. Wait for booking result and capture it
+    logger.info('Waiting for booking result...');
+    
+    // Wait longer for payment processing
+    await page.waitForTimeout(10000);
+    
+    // Take screenshot of result
+    await captureScreenshot(page, 'booking-result');
+    
+    // Try to detect success or failure from page content
+    const currentUrl = page.url();
+    const pageContent = await page.content();
+    
+    // Look for success indicators
+    const successIndicators = [
+      'prenotazione confermata',
+      'booking confirmed',
+      'conferma prenotazione',
+      'numero di prenotazione',
+      'booking reference',
+      'conferma di prenotazione'
+    ];
+    
+    // Look for error indicators
+    const errorIndicators = [
+      'errore',
+      'error',
+      'carta rifiutata',
+      'declined',
+      'payment failed',
+      'pagamento fallito',
+      'fondi insufficienti'
+    ];
+    
+    const hasSuccess = successIndicators.some(indicator => 
+      pageContent.toLowerCase().includes(indicator)
+    );
+    
+    const hasError = errorIndicators.some(indicator => 
+      pageContent.toLowerCase().includes(indicator)
+    );
+    
+    // Try to extract booking reference if successful
+    let bookingReference = null;
+    if (hasSuccess) {
+      const refMatches = pageContent.match(/(\w{8,}|[A-Z]{2,}\d{4,}|\d{8,})/g);
+      if (refMatches && refMatches.length > 0) {
+        bookingReference = refMatches[0]; // Take first match as potential reference
+      }
+    }
+    
+    const result = {
+      success: hasSuccess && !hasError,
+      message: hasSuccess ? 'Booking completed successfully' : 
+               hasError ? 'Booking failed - payment or validation error' : 
+               'Booking result unclear',
+      bookingReference,
+      url: currentUrl,
+      timestamp: new Date().toISOString()
+    };
+    
+    logger.info('Booking completion result:', result);
+    return result;
+    
+  } catch (error) {
+    logger.error('Error in completeBookingWithRealSelectors:', error);
+    await captureScreenshot(page, 'booking-completion-error');
+    
+    return {
+      success: false,
+      message: `Booking completion failed: ${error.message}`,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
 module.exports = {
   initBrowser,
   createPage,
@@ -760,6 +1257,8 @@ module.exports = {
   executeSearchWithRealDOM,
   selectRoom,
   submitBooking,
+  fillPersonalDataPage,
+  completeBookingWithRealSelectors,
   cleanup
 };
 

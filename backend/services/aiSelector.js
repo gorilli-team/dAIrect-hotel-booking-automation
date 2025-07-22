@@ -512,7 +512,57 @@ const CUSTOMER_DATA_SELECTORS = {
   guaranteeBadge: '.Badge:contains("ufficiale"), .e1jssjhy1'
 };
 
-// Selettori per la pagina di pagamento con carta di credito
+// Selettori per la pagina di completamento prenotazione (garantire la prenotazione)
+const BOOKING_COMPLETION_SELECTORS = {
+  // Campo numero di telefono
+  mobilePhone: 'input[name="mobilePhone"]',
+  mobilePhoneLabel: 'label[for*="mobilePhone"]',
+  
+  // Selettori per i metodi di pagamento
+  creditCardRadio: 'input[name="paymentMethodId"][value="104"]',
+  bankTransferRadio: 'input[name="paymentMethodId"][value="1"]',
+  
+  // Campi carta di credito (potrebbero essere dinamici o in iframe)
+  cardNumber: 'input[name="cardNumber"], input[id*="card"][id*="number"], .card-number input',
+  cardExpiry: 'input[name="cardExpiry"], input[id*="expir"], .card-expiry input',
+  cardCvv: 'input[name="cardCvv"], input[id*="cvv"], input[id*="cvc"], .card-cvv input',
+  cardHolder: 'input[name="cardHolder"], input[id*="holder"], .card-holder input',
+  
+  // Checkbox accettazione condizioni (obbligatorio)
+  termsCheckbox: 'input[name="bookinkAndPrivacyPoliciesAcceptance"]',
+  termsLabel: 'label[for*="bookinkAndPrivacyPoliciesAcceptance"]',
+  
+  // Checkbox newsletter (opzionale)
+  newsletterCheckbox: 'input[name="newsletterSubscription"]',
+  
+  // Bottone finale prenotazione
+  finalBookingButton: 'button.GuaranteeDataCollectionPage_CTA, .GuaranteeDataCollectionPage_CTA, button:contains("Prenota")',
+  sidebarBookingButton: 'button.DesktopSidebar_CTA, .DesktopSidebar_CTA',
+  
+  // Indicatori di caricamento o successo
+  loadingIndicator: '.loading, .spinner, [class*="loading"]',
+  successMessage: '.success, .confirmation, [class*="success"], [class*="confirmation"]',
+  errorMessage: '.error, .alert, [class*="error"], [class*="alert"]',
+  
+  // Links alle condizioni
+  conditionsLink: '.sb-condition-popup-link',
+  privacyLink: '.sb-privacy-popup-link',
+  
+  // Selettori per pagamento sicuro
+  sslEncryption: '.SSLDataEncryption, .epts9b60',
+  securityLogos: 'img[alt="comodo secure"], img[alt="pci dss"]',
+  
+  // Selettori per iframe/popup del pagamento (potrebbero apparire)
+  paymentFrame: 'iframe[src*="payment"], iframe[src*="card"], .payment-frame',
+  paymentModal: '.payment-modal, .card-modal, [class*="payment"][class*="modal"]',
+  
+  // Elementi per la pagina di risultato finale
+  bookingConfirmation: '.booking-confirmed, .confirmation-page, h1:contains("Prenotazione confermata")',
+  bookingReference: '.booking-reference, .confirmation-number, [class*="booking"][class*="number"]',
+  bookingError: '.booking-error, .payment-error, .error-message'
+};
+
+// Selettori per la pagina di pagamento con carta di credito (deprecato, sostituito da BOOKING_COMPLETION_SELECTORS)
 const PAYMENT_PAGE_SELECTORS = {
   // Dati già inseriti (disabilitati)
   customerDataDisabled: {
@@ -936,5 +986,6 @@ module.exports = {
   fillCustomerDataForm,
   COOKIE_SELECTORS,
   AVAILABILITY_RESULTS_SELECTORS,
-  CUSTOMER_DATA_SELECTORS
+  CUSTOMER_DATA_SELECTORS,
+  BOOKING_COMPLETION_SELECTORS
 };
