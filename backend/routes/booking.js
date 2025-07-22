@@ -29,12 +29,23 @@ async function extractRoomsWithSelectors(page) {
   const rooms = [];
   
   try {
-    // Aspetta che ci siano delle camere sulla pagina
-    await page.waitForSelector('.RoomCard, .RoomResultBlock, .ekc2wag12, .eio1k2u2', { timeout: 10000 });
+    // Aspetta che ci siano delle camere sulla pagina - usa solo il container principale
+    await page.waitForSelector('.RoomResultBlock, .eio1k2u2', { timeout: 10000 });
     
-    // Trova tutte le cards delle camere
-    const roomCards = await page.locator('.RoomCard, .RoomResultBlock, .ekc2wag12, .eio1k2u2');
+    // Trova tutte le sezioni delle camere (container principale, non i figli)
+    const roomCards = await page.locator('.RoomResultBlock, .eio1k2u2');
     const roomCount = await roomCards.count();
+    
+    // Log per debugging
+    const debugInfo = await roomCards.evaluateAll(elements => {
+      return elements.map((el, index) => ({
+        index,
+        classes: el.className,
+        hasRoomCard: el.querySelector('.RoomCard') !== null,
+        hasPrice: el.querySelector('[class*="mainAmount"]') !== null
+      }));
+    });
+    logger.info('Room cards debug info:', debugInfo);
     
     logger.info(`Found ${roomCount} room cards on page`);
     
@@ -46,10 +57,86 @@ async function extractRoomsWithSelectors(page) {
         const titleElement = roomCard.locator('.RoomCard h3, .ekc2wag9 h3, h3.Heading strong').first();
         const title = await titleElement.textContent().catch(() => `Camera ${i + 1}`);
         
-        // Estrai prezzo
-        const priceElement = roomCard.locator('.Prices .mainAmount, .eiup2eu1, .mainAmount span').first();
-        const priceText = await priceElement.textContent().catch(() => '0');
-        const price = priceText.replace(/[^0-9,\.]/g, '').replace(',', '.').split('.')[0] || '0';
+        // Estrai prezzo con selettori multipli basati sulla struttura SimpleBooking reale
+        const priceSelectors = [
+          // Selettori specifici SimpleBooking dal body fornito
+          '.Prices .mainAmount span', // Struttura esatta dal HTML: .Prices .mainAmount span
+          '.eiup2eu1 span', // Classe specifica SimpleBooking con span figlio
+          '.mainAmount span', // Versione più generica
+          '.eo2ouhh3 .mainAmount span', // Con classe container Prices
+          '.ltr-1yp4sq2 span', // Classe layout specifica
+          '.mainAmount', // Senza span specifico
+          '.eiup2eu1', // Classe diretta
+          '[class*="mainAmount"]', // Qualsiasi classe contenente mainAmount
+          '[class*="eiup2eu"]', // Qualsiasi classe SimpleBooking per prezzi
+          'div[type="PRICES"] .mainAmount span', // Attributo type=PRICES specifico
+          'div[type="PRICES"] span', // Solo con attributo type
+          '[translate="no"] span' // Elementi con translate="no" (prezzi)
+        ];
+        
+        let priceText = '0';
+        let priceFound = false;
+        
+        for (const selector of priceSelectors) {
+          try {
+            const priceElement = roomCard.locator(selector).first();
+            const elementText = await priceElement.textContent({ timeout: 1000 });
+            if (elementText && elementText.match(/\d/)) {
+              priceText = elementText;
+              priceFound = true;
+              logger.info(`Price found with selector '${selector}': ${elementText}`);
+              break;
+            }
+          } catch (error) {
+            // Continua con il prossimo selettore
+          }
+        }
+        
+        if (!priceFound) {
+          // Fallback: cerca qualsiasi testo con € nella card
+          try {
+            const allText = await roomCard.textContent();
+            const euroMatch = allText.match(/\d+[,.]?\d*\s*€|€\s*\d+[,.]?\d*/g);
+            if (euroMatch && euroMatch.length > 0) {
+              priceText = euroMatch[0];
+              logger.info(`Price found with € fallback: ${priceText}`);
+            }
+          } catch (error) {
+            logger.warn('No price found anywhere in room card');
+          }
+        }
+        
+        // Pulizia del prezzo: gestisce formato SimpleBooking (€2.085,72)
+        let price = '99'; // default fallback
+        if (priceText) {
+          // Remove currency symbols and spaces
+          let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
+          
+          // Handle Italian number format: 2.085,72 (thousands separator . and decimal separator ,)
+          if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+            // Format like 2.085,72 - remove thousands separator and use comma as decimal
+            cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+          } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+            // Format like 2085,72 - replace comma with dot
+            cleanedPrice = cleanedPrice.replace(',', '.');
+          }
+          // If only contains dots, assume it's thousands separator like 2.085
+          else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
+            const parts = cleanedPrice.split('.');
+            if (parts.length === 2 && parts[1].length <= 2) {
+              // Likely decimal: 2085.72
+              cleanedPrice = cleanedPrice;
+            } else {
+              // Likely thousands: 2.085
+              cleanedPrice = cleanedPrice.replace(/\./g, '');
+            }
+          }
+          
+          const numericPrice = parseFloat(cleanedPrice);
+          if (!isNaN(numericPrice) && numericPrice > 0) {
+            price = Math.floor(numericPrice).toString(); // Remove decimals for consistency
+          }
+        }
         
         // Estrai descrizione
         const descElement = roomCard.locator('.ekc2wag6, .RoomCard .Paragraph').first();
@@ -81,19 +168,37 @@ async function extractRoomsWithSelectors(page) {
           limitedAvailability: limitedAvailText
         };
         
-        rooms.push(room);
-        logger.info(`Extracted room: ${room.name} - €${room.price}`);
+        // Check for duplicates before adding (simple deduplication by name)
+        const existingRoom = rooms.find(existingRoom => 
+          existingRoom.name.toLowerCase().trim() === room.name.toLowerCase().trim()
+        );
+        
+        if (!existingRoom) {
+          rooms.push(room);
+          logger.info(`Extracted room: ${room.name} - €${room.price}`);
+        } else {
+          logger.info(`Skipped duplicate room: ${room.name} (already found with price €${existingRoom.price})`);
+        }
         
       } catch (error) {
         logger.warn(`Failed to extract data for room card ${i + 1}:`, error.message);
       }
     }
     
+    // Final deduplication pass (just in case)
+    const uniqueRooms = rooms.filter((room, index, self) => 
+      index === self.findIndex(r => r.name.toLowerCase().trim() === room.name.toLowerCase().trim())
+    );
+    
+    if (uniqueRooms.length !== rooms.length) {
+      logger.info(`Removed ${rooms.length - uniqueRooms.length} duplicate rooms`);
+    }
+    
     return {
       success: true,
-      rooms: rooms,
-      totalRooms: rooms.length,
-      message: `Found ${rooms.length} rooms using direct selectors`
+      rooms: uniqueRooms,
+      totalRooms: uniqueRooms.length,
+      message: `Found ${uniqueRooms.length} unique rooms using direct selectors`
     };
     
   } catch (error) {

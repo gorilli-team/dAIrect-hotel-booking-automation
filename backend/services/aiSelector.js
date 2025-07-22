@@ -432,8 +432,8 @@ const AVAILABILITY_RESULTS_SELECTORS = {
   // Titolo della camera
   roomTitle: '.RoomCard h3, .ekc2wag9 h3, h3.Heading strong',
   
-  // Prezzo della camera
-  roomPrice: '.Prices .mainAmount, .eiup2eu1, .mainAmount span',
+  // Prezzo della camera - selettori basati sulla struttura HTML reale SimpleBooking
+  roomPrice: '.Prices .mainAmount span, .eiup2eu1 span, .mainAmount span, [translate="no"] span',
   
   // Bottone "Info e prenota" principale
   mainBookButton: '.RoomCard_CTA, .ekc2wag2, button:contains("Info e prenota")',
