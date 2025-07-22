@@ -38,7 +38,6 @@ const LoadingOverlay = ({ message = 'Caricamento in corso...' }) => {
           
           {/* Additional Info */}
           <div className="mt-4 text-xs text-gray-500">
-            <p>🤖 GPT-4 sta analizzando la pagina HTML</p>
             <p>🎯 Playwright sta eseguendo le azioni</p>
           </div>
         </div>

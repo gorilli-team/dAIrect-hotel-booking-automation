@@ -93,7 +93,7 @@ PORT=3001
 NODE_ENV=development
 
 # Browser Configuration
-HEADLESS=false                    # true per headless, false per vedere il browser
+HEADLESS=true                     # true per headless, false per vedere il browser
 BROWSER_TIMEOUT=30000
 TARGET_HOTEL_URL=https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR
 ```
@@ -232,7 +232,7 @@ I screenshot vengono salvati automaticamente in `backend/logs/`:
 ### Mode Sviluppo
 - Frontend: hot reload su http://localhost:5173
 - Backend: auto-restart con nodemon su http://localhost:3001
-- Browser: visibile (HEADLESS=false)
+- Browser: headless (HEADLESS=true per performance, false per debugging)
 
 ## 🔒 Sicurezza e Limitazioni
 
