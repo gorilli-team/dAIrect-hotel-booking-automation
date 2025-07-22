@@ -77,7 +77,7 @@ async function testBookingFlow() {
         cardHolder: "Mario Rossi",
         acceptNewsletter: false
       },
-      testMode: true // IMPORTANTE: modalità test per evitare pagamenti reali
+      testMode: false // MODALITÀ PAGAMENTO REALE: abilita transazioni vere
     }, {
       timeout: 60000 // 1 minuto per il processo di pagamento
     });
