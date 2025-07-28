@@ -152,6 +152,76 @@ async function extractRoomsWithSelectors(page) {
           mainBookSelector = `.RoomCard:nth-child(${i + 1}) .RoomCard_CTA, .RoomResultBlock:nth-child(${i + 1}) button`;
         }
         
+        // Estrai immagini dal carousel
+        const images = [];
+        try {
+          // Selettori per le immagini nel carousel SpringImageCarousel
+          const imageSelectors = [
+            '.SpringImageCarousel img[src]',
+            '.e1sp74u31[src]', // Classe specifica delle immagini
+            '.SpringImageCarousel__Slide img[src]',
+            '.e1sp74u35[style*="background-image"]', // Background images
+            '[class*="SpringImageCarousel"] img[src]'
+          ];
+          
+          for (const selector of imageSelectors) {
+            try {
+              const imageElements = roomCard.locator(selector);
+              const imageCount = await imageElements.count();
+              
+              for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+                const imgElement = imageElements.nth(imgIdx);
+                
+                // Prova a ottenere l'URL dalla src
+                let imageUrl = await imgElement.getAttribute('src').catch(() => null);
+                
+                // Se non c'è src, prova con background-image
+                if (!imageUrl) {
+                  const style = await imgElement.getAttribute('style').catch(() => null);
+                  if (style && style.includes('background-image')) {
+                    const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
+                    if (urlMatch) {
+                      imageUrl = urlMatch[1];
+                    }
+                  }
+                }
+                
+                // Aggiungi immagine se valida e non duplicata
+                if (imageUrl && imageUrl.startsWith('http') && !images.includes(imageUrl)) {
+                  images.push(imageUrl);
+                  logger.info(`Found room image: ${imageUrl}`);
+                }
+              }
+              
+              if (images.length > 0) break; // Se abbiamo trovato immagini, non continuare con altri selettori
+            } catch (error) {
+              // Continua con il prossimo selettore
+            }
+          }
+          
+          // Fallback: cerca anche nei div con background-image
+          if (images.length === 0) {
+            const bgElements = roomCard.locator('[style*="background-image"]');
+            const bgCount = await bgElements.count();
+            
+            for (let bgIdx = 0; bgIdx < bgCount; bgIdx++) {
+              const bgElement = bgElements.nth(bgIdx);
+              const style = await bgElement.getAttribute('style').catch(() => null);
+              
+              if (style && style.includes('background-image')) {
+                const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
+                if (urlMatch && urlMatch[1].startsWith('http') && !images.includes(urlMatch[1])) {
+                  images.push(urlMatch[1]);
+                  logger.info(`Found room background image: ${urlMatch[1]}`);
+                }
+              }
+            }
+          }
+          
+        } catch (error) {
+          logger.warn(`Failed to extract images for room ${i + 1}:`, error.message);
+        }
+        
         // Verifica disponibilità limitata
         const limitedAvailElement = roomCard.locator('.enongdq2, :has-text("Ne resta solo"), :has-text("Ne restano solo")');
         const limitedAvailText = await limitedAvailElement.textContent().catch(() => null);
@@ -165,7 +235,8 @@ async function extractRoomsWithSelectors(page) {
           features: ['WiFi gratuito', 'Aria condizionata'],
           mainBookSelector,
           available: true,
-          limitedAvailability: limitedAvailText
+          limitedAvailability: limitedAvailText,
+          images: images // Array di URL delle immagini
         };
         
         // Check for duplicates before adding (simple deduplication by name)
