@@ -116,6 +116,90 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                       <span className="text-gray-500 ml-2">per notte</span>
                     </div>
                     
+                    {/* Informazioni Camera */}
+                    {(room.roomSize || room.guestCapacity) && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+                          {room.roomSize && (
+                            <div className="flex items-center">
+                              <svg className="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm8 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V8z" clipRule="evenodd" />
+                              </svg>
+                              <span className="font-medium">{room.roomSize}</span>
+                            </div>
+                          )}
+                          {room.guestCapacity && (
+                            <div className="flex items-center">
+                              <svg className="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                              </svg>
+                              <div className="flex items-center gap-2">
+                                {/* Parser intelligente per adult/crib */}
+                                {(() => {
+                                  const text = room.guestCapacity;
+                                  
+                                  // Estrai "Max ospiti:"
+                                  const prefixMatch = text.match(/^[^:]*:/);
+                                  const prefix = prefixMatch ? prefixMatch[0] + ' ' : '';
+                                  
+                                  let totalAdults = 0;
+                                  let totalCribs = 0;
+                                  
+                                  // Pattern per adult/adult[numero]
+                                  const adultMatches = text.match(/adult(\d*)/g) || [];
+                                  adultMatches.forEach(match => {
+                                    const numberMatch = match.match(/adult(\d+)/);
+                                    if (numberMatch) {
+                                      totalAdults += parseInt(numberMatch[1]);
+                                    } else {
+                                      totalAdults += 1; // solo "adult" = 1 adulto
+                                    }
+                                  });
+                                  
+                                  // Pattern per crib/crib[numero]
+                                  const cribMatches = text.match(/crib(\d*)/g) || [];
+                                  cribMatches.forEach(match => {
+                                    const numberMatch = match.match(/crib(\d+)/);
+                                    if (numberMatch) {
+                                      totalCribs += parseInt(numberMatch[1]);
+                                    } else {
+                                      totalCribs += 1; // solo "crib" = 1 culla
+                                    }
+                                  });
+                                  
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{prefix}</span>
+                                      
+                                      {/* Adulti: numero + icona */}
+                                      {totalAdults > 0 && (
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-medium text-blue-600">{totalAdults}</span>
+                                          <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                          </svg>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Culle: numero + icona */}
+                                      {totalCribs > 0 && (
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-medium text-pink-500">{totalCribs}</span>
+                                          <svg className="w-4 h-4 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M6 18h12v-2c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v2zm14-8h-2V8c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v6h2v-2h16v2h2v-6c0-1.1-.9-2-2-2z"/>
+                                          </svg>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Descrizione */}
                     {room.description && (
                       <p className="text-gray-700 mb-4 leading-relaxed">
