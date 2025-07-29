@@ -8,6 +8,7 @@ export const useBooking = () => {
     searchParams: null,
     availableRooms: [],
     selectedRoom: null,
+    personalData: null, // Store personal data from first step
     bookingResult: null,
     loading: null,
     error: null
@@ -114,6 +115,7 @@ export const useBooking = () => {
       const response = await bookingService.fillPersonalData(state.sessionId, personalData)
 
       updateState({
+        personalData: personalData, // Store personal data for later use
         currentStep: 'payment', // Move to payment step
         loading: null
       })
@@ -126,16 +128,32 @@ export const useBooking = () => {
   }, [state.sessionId, setLoading, setError, updateState])
 
   // Step 2: Complete booking with payment data
-  const completeBooking = useCallback(async (bookingData, testMode = false) => {
+  const completeBooking = useCallback(async (paymentData, testMode = false) => {
     if (!state.sessionId) {
       setError('Nessuna sessione attiva')
+      return
+    }
+
+    if (!state.personalData) {
+      setError('Dati personali mancanti')
       return
     }
 
     setLoading('Completamento prenotazione...')
 
     try {
-      const response = await bookingService.completeBooking(state.sessionId, bookingData, testMode)
+      // Combine personal data with payment data
+      const completeBookingData = {
+        email: state.personalData.email,
+        phone: paymentData.phone,
+        paymentMethod: 'credit_card',
+        cardNumber: paymentData.cardNumber?.replace(/\s/g, ''), // Remove spaces
+        cardExpiry: `${paymentData.expiryMonth}/${paymentData.expiryYear.slice(-2)}`, // Convert to MM/YY format
+        cardHolder: paymentData.cardHolder,
+        acceptNewsletter: state.personalData.acceptNewsletter || false
+      }
+
+      const response = await bookingService.completeBooking(state.sessionId, completeBookingData, testMode)
 
       updateState({
         bookingResult: response,
@@ -160,7 +178,7 @@ export const useBooking = () => {
       
       throw error
     }
-  }, [state.sessionId, setLoading, setError, updateState])
+  }, [state.sessionId, state.personalData, setLoading, setError, updateState])
 
   // Legacy method for backward compatibility
   const submitBooking = useCallback(async (room, personalData) => {
@@ -215,6 +233,7 @@ export const useBooking = () => {
       searchParams: null,
       availableRooms: [],
       selectedRoom: null,
+      personalData: null,
       bookingResult: null,
       loading: null,
       error: null

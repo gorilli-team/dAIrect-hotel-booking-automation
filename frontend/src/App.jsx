@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router-dom'
 import SearchForm from './components/SearchForm'
 import RoomSelection from './components/RoomSelection'
 import BookingForm from './components/BookingForm'
+import PersonalDataForm from './components/PersonalDataForm'
+import PaymentForm from './components/PaymentForm'
 import BookingResult from './components/BookingResult'
 import Header from './components/Header'
 import StepIndicator from './components/StepIndicator'
@@ -23,6 +25,8 @@ function App() {
     startSearch,
     getRooms,
     selectRoom,
+    fillPersonalData,
+    completeBooking,
     submitBooking,
     resetBooking
   } = useBooking()
@@ -30,7 +34,8 @@ function App() {
   const steps = [
     { id: 'search', title: 'Ricerca', description: 'Date e ospiti' },
     { id: 'rooms', title: 'Camere', description: 'Selezione camera' },
-    { id: 'booking', title: 'Prenotazione', description: 'Dati personali' },
+    { id: 'personal-data', title: 'Dati personali', description: 'Nome, email' },
+    { id: 'payment', title: 'Pagamento', description: 'Telefono, carta' },
     { id: 'result', title: 'Risultato', description: 'Conferma finale' }
   ]
 
@@ -128,11 +133,21 @@ function App() {
             />
           )}
 
-          {currentStep === 'booking' && selectedRoom && (
-            <BookingForm
+          {currentStep === 'personal-data' && selectedRoom && (
+            <PersonalDataForm
               room={selectedRoom}
               searchParams={searchParams}
-              onSubmit={handleBookingSubmit}
+              onSubmit={fillPersonalData}
+              onBack={() => window.history.back()}
+              loading={loading}
+            />
+          )}
+
+          {currentStep === 'payment' && selectedRoom && (
+            <PaymentForm
+              room={selectedRoom}
+              searchParams={searchParams}
+              onSubmit={completeBooking}
               onBack={() => window.history.back()}
               loading={loading}
             />

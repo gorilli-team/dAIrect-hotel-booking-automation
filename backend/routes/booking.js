@@ -665,11 +665,38 @@ router.post('/start-search', async (req, res) => {
     const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children });
     logger.info('Using direct URL for search', { directUrl });
 
-    // Navigate directly to search results page
-    await page.goto(directUrl, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 15000
-    });
+    // Navigate directly to search results page with retry logic
+    let navigationSuccess = false;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        logger.info(`Navigation attempt ${attempt}/3 to: ${directUrl}`);
+        
+        await page.goto(directUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 30000 // Increased timeout to 30 seconds
+        });
+        
+        navigationSuccess = true;
+        logger.info(`Navigation successful on attempt ${attempt}`);
+        break;
+        
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Navigation attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < 3) {
+          logger.info(`Waiting 2 seconds before retry...`);
+          await page.waitForTimeout(2000);
+        }
+      }
+    }
+    
+    if (!navigationSuccess) {
+      logger.error('All navigation attempts failed:', lastError?.message);
+      throw new Error(`Failed to navigate to search page after 3 attempts: ${lastError?.message}`);
+    }
     
     // Handle cookie consent if present
     await aiService.handleCookieConsent(page);
@@ -948,6 +975,14 @@ router.post('/select-room', async (req, res) => {
     logger.info('Waiting for navigation to customer data page...');
     await session.page.waitForTimeout(5000); // Give more time for navigation
     
+    // DEBUG: Get current page state
+    const currentUrl = session.page.url();
+    const pageTitle = await session.page.title();
+    logger.info('After clicking Prenota button:', {
+      url: currentUrl,
+      title: pageTitle
+    });
+    
     // Check if we're on customer data page by looking for form elements
     const isCustomerDataPage = await session.page.isVisible(
       'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")' 
@@ -955,6 +990,46 @@ router.post('/select-room', async (req, res) => {
 
     if (!isCustomerDataPage) {
       logger.warn('Not on customer data page yet, taking screenshot for debugging');
+      
+      // DEBUG: Check for any forms or input fields on current page
+      const allInputs = await session.page.locator('input').all();
+      const inputInfo = [];
+      
+      for (let i = 0; i < Math.min(allInputs.length, 10); i++) {
+        try {
+          const input = allInputs[i];
+          const type = await input.getAttribute('type');
+          const name = await input.getAttribute('name');
+          const id = await input.getAttribute('id');
+          const placeholder = await input.getAttribute('placeholder');
+          const visible = await input.isVisible();
+          
+          inputInfo.push({ index: i, type, name, id, placeholder, visible });
+        } catch (e) {
+          // Skip this input
+        }
+      }
+      
+      logger.info('DEBUG - Current page inputs:', inputInfo);
+      
+      // Check for potential next steps or buttons
+      const allButtons = await session.page.locator('button, input[type="button"], input[type="submit"]').all();
+      const buttonInfo = [];
+      
+      for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+        try {
+          const button = allButtons[i];
+          const text = await button.textContent();
+          const className = await button.getAttribute('class');
+          const visible = await button.isVisible();
+          
+          buttonInfo.push({ index: i, text: text?.trim(), class: className, visible });
+        } catch (e) {
+          // Skip this button
+        }
+      }
+      
+      logger.info('DEBUG - Current page buttons:', buttonInfo);
     }
 
     // Take screenshot for debugging
@@ -1042,7 +1117,126 @@ router.post('/fill-personal-data', async (req, res) => {
 
     if (fillResult.success) {
       // Click the "Continua" button after filling personal data
-      await session.page.click('.CustomerDataCollectionPage_CTA').catch(() => false);
+      logger.info('Clicking Continua button to proceed to payment page');
+      
+      try {
+        // First, ensure privacy policy is accepted if not already
+        logger.info('Ensuring privacy policy is accepted before clicking Continue');
+        const privacySelectors = [
+          'input[name="privacyPolicyAcceptance"]',
+          'input[name="privacy"]',
+          'input[type="checkbox"]' // Generic fallback
+        ];
+        
+        for (const privacySelector of privacySelectors) {
+          try {
+            const privacyCheckbox = await session.page.waitForSelector(privacySelector, { timeout: 2000 });
+            if (privacyCheckbox) {
+              const isChecked = await privacyCheckbox.isChecked();
+              if (!isChecked) {
+                await privacyCheckbox.check();
+                logger.info(`Privacy policy accepted with selector: ${privacySelector}`);
+                await session.page.waitForTimeout(1000); // Give time for UI to update
+              }
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        // Try multiple selectors for the Continue button
+        const continueSelectors = [
+          'button.CustomerDataCollectionPage_CTA',
+          '.CustomerDataCollectionPage_CTA',
+          'button.CustomerDataCollectionPage_CTA.CTA',
+          'button:has-text("Continua")',
+          'button[type="submit"]',
+          '.CTA:has-text("Continua")',
+          'button.CTA'
+        ];
+        
+        let continueClicked = false;
+        let usedSelector = null;
+        
+        for (const selector of continueSelectors) {
+          try {
+            logger.info(`Trying Continue button selector: ${selector}`);
+            
+            // Wait for selector with shorter timeout to try multiple selectors quickly
+            const button = await session.page.waitForSelector(selector, { timeout: 3000 });
+            if (button) {
+              const isVisible = await button.isVisible();
+              const isEnabled = await button.isEnabled();
+              
+              logger.info(`Continue button found: visible=${isVisible}, enabled=${isEnabled}`);
+              
+              if (isVisible && isEnabled) {
+                await button.click();
+                continueClicked = true;
+                usedSelector = selector;
+                logger.info(`Successfully clicked Continue button with selector: ${selector}`);
+                break;
+              } else {
+                logger.warn(`Continue button found but not clickable: visible=${isVisible}, enabled=${isEnabled}`);
+              }
+            }
+          } catch (e) {
+            logger.debug(`Continue selector ${selector} failed: ${e.message}`);
+            continue;
+          }
+        }
+        
+        if (!continueClicked) {
+          // Take screenshot for debugging before throwing error
+          await session.page.screenshot({ 
+            path: `backend/logs/continue-button-not-found-${sessionId}.png`,
+            fullPage: true
+          });
+          
+          throw new Error('Could not find or click Continue button with any selector');
+        }
+        
+        // Wait for navigation to payment page
+        logger.info('Waiting for navigation to payment page...');
+        await session.page.waitForTimeout(5000); // Give time for page to load
+        
+        // Take screenshot to verify we're on the payment page
+        await session.page.screenshot({ 
+          path: `backend/logs/after-continua-click-${sessionId}.png`,
+          fullPage: true
+        });
+        
+        // Verify we're on the payment page by checking for payment elements
+        const isOnPaymentPage = await session.page.evaluate(() => {
+          const paymentIndicators = [
+            'input[name="mobilePhone"]',
+            '.PaymentMethodsForm',
+            'h2:contains("Scegli come garantire")',
+            '.GuaranteeDataCollectionPage'
+          ];
+          
+          return paymentIndicators.some(selector => {
+            try {
+              return document.querySelector(selector) !== null;
+            } catch (e) {
+              return false;
+            }
+          });
+        });
+        
+        if (isOnPaymentPage) {
+          logger.info('Successfully navigated to payment page');
+        } else {
+          logger.warn('May not be on payment page yet, but continuing...');
+        }
+        
+        logger.info(`Continue button clicked successfully using selector: ${usedSelector}`);
+        
+      } catch (error) {
+        logger.error('Error clicking Continua button:', error);
+        throw new Error(`Failed to click Continua button: ${error.message}`);
+      }
 
       // Update session - move to payment step
       session.currentStep = 'payment';
