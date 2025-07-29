@@ -1067,7 +1067,23 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
         }
 
         const cardRadioButton = await page.locator('input#_r1c_').first();
-        const termsCheckbox = await page.locator('input#_r1j_').first();
+        const termsCheckboxSelectors = [
+          'input#_r1v_',
+          'input[name="bookinkAndPrivacyPoliciesAcceptance"]'
+        ];
+
+        let termsCheckbox = null;
+        for (const selector of termsCheckboxSelectors) {
+          try {
+            termsCheckbox = await page.locator(selector).first();
+            if (termsCheckbox) {
+              logger.info(`Terms and privacy checkbox found with selector: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
 
         // CVV non richiesto, quindi rimuoviamo menzione CVV
 
@@ -1079,12 +1095,15 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
           }
         }
 
-        if (await termsCheckbox.isVisible({ timeout: 2000 })) {
+        if (termsCheckbox && await termsCheckbox.isVisible({ timeout: 2000 })) {
           const isTermsChecked = await termsCheckbox.isChecked();
           if (!isTermsChecked) {
             await termsCheckbox.check();
             logger.info('Terms and conditions accepted');
           }
+        } else {
+          logger.error('Terms and privacy checkbox not found');
+          throw new Error('Could not find terms and privacy checkbox');
         }
 
         // Flexible selectors for the booking button
