@@ -57,84 +57,114 @@ async function extractRoomsWithSelectors(page) {
         const titleElement = roomCard.locator('.RoomCard h3, .ekc2wag9 h3, h3.Heading strong').first();
         const title = await titleElement.textContent().catch(() => `Camera ${i + 1}`);
         
-        // Estrai prezzo con selettori multipli basati sulla struttura SimpleBooking reale
-        const priceSelectors = [
-          // Selettori specifici SimpleBooking dal body fornito
-          '.Prices .mainAmount span', // Struttura esatta dal HTML: .Prices .mainAmount span
-          '.eiup2eu1 span', // Classe specifica SimpleBooking con span figlio
-          '.mainAmount span', // Versione più generica
-          '.eo2ouhh3 .mainAmount span', // Con classe container Prices
-          '.ltr-1yp4sq2 span', // Classe layout specifica
-          '.mainAmount', // Senza span specifico
-          '.eiup2eu1', // Classe diretta
-          '[class*="mainAmount"]', // Qualsiasi classe contenente mainAmount
-          '[class*="eiup2eu"]', // Qualsiasi classe SimpleBooking per prezzi
-          'div[type="PRICES"] .mainAmount span', // Attributo type=PRICES specifico
-          'div[type="PRICES"] span', // Solo con attributo type
-          '[translate="no"] span' // Elementi con translate="no" (prezzi)
-        ];
+        // Estrai blocco prezzo completo (con sconto, tasse, notti, etc.)
+        let priceBlock = null;
+        let price = '99'; // Fallback numerico per compatibilità
         
-        let priceText = '0';
-        let priceFound = false;
-        
-        for (const selector of priceSelectors) {
-          try {
-            const priceElement = roomCard.locator(selector).first();
-            const elementText = await priceElement.textContent({ timeout: 1000 });
-            if (elementText && elementText.match(/\d/)) {
-              priceText = elementText;
-              priceFound = true;
-              logger.info(`Price found with selector '${selector}': ${elementText}`);
-              break;
+        try {
+          // Cerca il blocco prezzo completo con il selettore principale
+          const priceBlockSelectors = [
+            'div[type="PRICES"].Prices.eo2ouhh3', // Selettore completo dal HTML fornito
+            '.Prices.eo2ouhh3', // Senza l'attributo type
+            'div[type="PRICES"]', // Solo con attributo type
+            '.Prices' // Generico
+          ];
+          
+          for (const selector of priceBlockSelectors) {
+            try {
+              const priceElement = roomCard.locator(selector).first();
+              const priceHtml = await priceElement.innerHTML().catch(() => null);
+              
+              if (priceHtml) {
+                // Estrai anche il testo per informazioni separate
+                const priceText = await priceElement.textContent().catch(() => null);
+                
+                priceBlock = {
+                  html: priceHtml,
+                  text: priceText ? priceText.trim() : null
+                };
+                
+                // Estrai prezzo numerico per compatibilità con il resto del sistema
+                const mainAmountElement = priceElement.locator('.mainAmount span').first();
+                const mainAmountText = await mainAmountElement.textContent().catch(() => null);
+                
+                if (mainAmountText) {
+                  // Pulisci il prezzo per ottenere valore numerico
+                  let cleanedPrice = mainAmountText.replace(/[^0-9,.]/g, '');
+                  
+                  // Gestisce formato italiano: 2.479,68
+                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+                    cleanedPrice = cleanedPrice.replace(',', '.');
+                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
+                    const parts = cleanedPrice.split('.');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                      cleanedPrice = cleanedPrice;
+                    } else {
+                      cleanedPrice = cleanedPrice.replace(/\./g, '');
+                    }
+                  }
+                  
+                  const numericPrice = parseFloat(cleanedPrice);
+                  if (!isNaN(numericPrice) && numericPrice > 0) {
+                    price = Math.floor(numericPrice).toString();
+                  }
+                }
+                
+                logger.info(`Price block found with selector '${selector}': ${priceText}`);
+                break;
+              }
+            } catch (error) {
+              continue;
             }
-          } catch (error) {
-            // Continua con il prossimo selettore
           }
+        } catch (error) {
+          logger.warn('Failed to extract price block:', error.message);
         }
         
-        if (!priceFound) {
-          // Fallback: cerca qualsiasi testo con € nella card
-          try {
-            const allText = await roomCard.textContent();
-            const euroMatch = allText.match(/\d+[,.]?\d*\s*€|€\s*\d+[,.]?\d*/g);
-            if (euroMatch && euroMatch.length > 0) {
-              priceText = euroMatch[0];
-              logger.info(`Price found with € fallback: ${priceText}`);
-            }
-          } catch (error) {
-            logger.warn('No price found anywhere in room card');
-          }
-        }
-        
-        // Pulizia del prezzo: gestisce formato SimpleBooking (€2.085,72)
-        let price = '99'; // default fallback
-        if (priceText) {
-          // Remove currency symbols and spaces
-          let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
+        // Se non troviamo il blocco completo, fallback al metodo precedente
+        if (!priceBlock) {
+          logger.info('Price block not found, falling back to simple price extraction');
           
-          // Handle Italian number format: 2.085,72 (thousands separator . and decimal separator ,)
-          if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
-            // Format like 2.085,72 - remove thousands separator and use comma as decimal
-            cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
-          } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
-            // Format like 2085,72 - replace comma with dot
-            cleanedPrice = cleanedPrice.replace(',', '.');
-          }
-          // If only contains dots, assume it's thousands separator like 2.085
-          else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
-            const parts = cleanedPrice.split('.');
-            if (parts.length === 2 && parts[1].length <= 2) {
-              // Likely decimal: 2085.72
-              cleanedPrice = cleanedPrice;
-            } else {
-              // Likely thousands: 2.085
-              cleanedPrice = cleanedPrice.replace(/\./g, '');
+          const priceSelectors = [
+            '.Prices .mainAmount span',
+            '.eiup2eu1 span',
+            '.mainAmount span',
+            '.mainAmount',
+            '[class*="mainAmount"]'
+          ];
+          
+          let priceText = '0';
+          let priceFound = false;
+          
+          for (const selector of priceSelectors) {
+            try {
+              const priceElement = roomCard.locator(selector).first();
+              const elementText = await priceElement.textContent({ timeout: 1000 });
+              if (elementText && elementText.match(/\d/)) {
+                priceText = elementText;
+                priceFound = true;
+                logger.info(`Fallback price found with selector '${selector}': ${elementText}`);
+                break;
+              }
+            } catch (error) {
+              continue;
             }
           }
           
-          const numericPrice = parseFloat(cleanedPrice);
-          if (!isNaN(numericPrice) && numericPrice > 0) {
-            price = Math.floor(numericPrice).toString(); // Remove decimals for consistency
+          if (priceFound) {
+            let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
+            if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+              cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+            } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+              cleanedPrice = cleanedPrice.replace(',', '.');
+            }
+            
+            const numericPrice = parseFloat(cleanedPrice);
+            if (!isNaN(numericPrice) && numericPrice > 0) {
+              price = Math.floor(numericPrice).toString();
+            }
           }
         }
         
@@ -339,6 +369,7 @@ async function extractRoomsWithSelectors(page) {
           description: description.trim().substring(0, 200), // Increased length for longer descriptions
           features: detailedFeatures.length > 0 ? detailedFeatures : ['WiFi gratuito', 'Aria condizionata'], // Use extracted features
           roomInfoBlock: roomInfoBlock, // Blocco HTML completo con dimensioni + ospiti
+          priceBlock: priceBlock, // Blocco HTML completo del prezzo (con sconto, tasse, notti, etc.)
           mainBookSelector,
           available: true,
           limitedAvailability: limitedAvailText,

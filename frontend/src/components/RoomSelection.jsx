@@ -1,5 +1,75 @@
 import React, { useState, useEffect, useRef } from 'react'
 
+// Componente per visualizzare il blocco prezzo completo con styling personalizzato
+const PriceBlockDisplay = ({ priceBlockHtml }) => {
+  const containerRef = useRef(null)
+  
+  useEffect(() => {
+    if (containerRef.current) {
+      const container = containerRef.current
+      
+      // Stili per il container principale dei prezzi
+      container.style.fontFamily = 'system-ui, -apple-system, sans-serif'
+      
+      // Stili per l'importo principale (.mainAmount)
+      const mainAmounts = container.querySelectorAll('.mainAmount, .eiup2eu1')
+      mainAmounts.forEach(amount => {
+        amount.style.fontSize = '2rem'
+        amount.style.fontWeight = '700'
+        amount.style.color = '#1f2937'
+        amount.style.lineHeight = '1.2'
+      })
+      
+      // Stili per prezzi barrati (prezzi originali)
+      const strikethroughPrices = container.querySelectorAll('[style*="text-decoration: line-through"]')
+      strikethroughPrices.forEach(price => {
+        price.style.fontSize = '1.1rem'
+        price.style.color = '#6b7280'
+        price.style.fontWeight = '500'
+      })
+      
+      // Stili per il badge di sconto/percentuale
+      const discountBadges = container.querySelectorAll('.discount, [class*="discount"], [style*="background"]')
+      discountBadges.forEach(badge => {
+        const text = badge.textContent?.trim()
+        if (text && text.includes('%')) {
+          badge.style.backgroundColor = '#dc2626'
+          badge.style.color = 'white'
+          badge.style.padding = '0.25rem 0.5rem'
+          badge.style.borderRadius = '0.375rem'
+          badge.style.fontSize = '0.875rem'
+          badge.style.fontWeight = '600'
+          badge.style.display = 'inline-block'
+        }
+      })
+      
+      // Stili per "Tasse incluse" e note simili
+      const taxNotes = container.querySelectorAll('span, div')
+      taxNotes.forEach(note => {
+        const text = note.textContent?.trim().toLowerCase()
+        if (text && (text.includes('tasse') || text.includes('inclus') || text.includes('notte') || text.includes('notti'))) {
+          note.style.fontSize = '0.875rem'
+          note.style.color = '#6b7280'
+          note.style.fontWeight = '500'
+        }
+      })
+      
+      // Layout generale del container
+      container.style.display = 'flex'
+      container.style.flexDirection = 'column'
+      container.style.gap = '0.5rem'
+      container.style.alignItems = 'flex-start'
+    }
+  }, [priceBlockHtml])
+  
+  return (
+    <div 
+      ref={containerRef}
+      dangerouslySetInnerHTML={{ __html: priceBlockHtml }}
+    />
+  )
+}
+
 // Componente per visualizzare le informazioni della camera con styling personalizzato
 const RoomInfoDisplay = ({ roomInfoHtml }) => {
   const containerRef = useRef(null)
@@ -207,27 +277,34 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                       {room.name}
                     </h3>
                     
-                    {/* Prezzo */}
-                    <div className="mb-4">
-                      <div className="mb-3">
-                        <span className="text-3xl font-bold text-blue-600">
-                          €{room.price}
-                        </span>
-                        <span className="text-gray-500 ml-2">per notte</span>
+                    {/* Blocco Prezzo Completo */}
+                    {room.priceBlock ? (
+                      <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 shadow-sm">
+                        <PriceBlockDisplay priceBlockHtml={room.priceBlock.html} />
                       </div>
-                      
-                      {/* Blocco informazioni camera con styling migliorato */}
-                      {room.roomInfoBlock && (
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 shadow-sm">
-                          <RoomInfoDisplay roomInfoHtml={room.roomInfoBlock.html} />
+                    ) : (
+                      /* Fallback al prezzo semplice se priceBlock non disponibile */
+                      <div className="mb-4">
+                        <div className="mb-3">
+                          <span className="text-3xl font-bold text-blue-600">
+                            €{room.price}
+                          </span>
+                          <span className="text-gray-500 ml-2">per notte</span>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+                    
+                    {/* Blocco informazioni camera con styling migliorato */}
+                    {room.roomInfoBlock && (
+                      <div className="mb-4">
+                        <RoomInfoDisplay roomInfoHtml={room.roomInfoBlock.html} />
+                      </div>
+                    )}
                     
                     {/* Descrizione - subito dopo prezzo/mq/max persone */}
                     {room.description && (
-                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
-                        <p className="text-gray-800 text-sm leading-relaxed italic">
+                      <div className="mb-4">
+                        <p className="text-gray-600 text-sm leading-relaxed italic">
                           {room.description}
                         </p>
                       </div>
