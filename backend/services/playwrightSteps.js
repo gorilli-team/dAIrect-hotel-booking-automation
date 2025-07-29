@@ -1033,6 +1033,10 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
       // Proviamo ad aspettare un po' di più per il caricamento
       await page.waitForTimeout(5000);
       await captureScreenshot(page, 'after-additional-wait');
+      
+      // Se non siamo ancora sulla pagina di pagamento, ritorna errore
+      logger.error('Not on payment page after waiting. Cannot proceed with booking completion.');
+      throw new Error('Not on payment page - please ensure personal data form was completed correctly');
     }
     
 // 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
