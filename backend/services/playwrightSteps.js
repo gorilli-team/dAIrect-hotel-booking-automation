@@ -1039,23 +1039,31 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
       throw new Error('Not on payment page - please ensure personal data form was completed correctly');
     }
     
-// 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
+    // 3. IMPORTANTE: Handle credit card payment process
     const paymentMethod = bookingData.paymentMethod || 'credit_card';
     
     if (paymentMethod === 'credit_card') {
       try {
-        const cardHolderSelectors = [
-          'input#_r25_',  // ID specifico
-          'input[name="creditCard.holder"]',
-          'input[aria-labelledby="_r26_"]' // aria-labelledby
+        // STEP 1: First select credit card payment method
+        logger.info('Selecting credit card payment method');
+        
+        const cardRadioSelectors = [
+          'input#_r1c_', // ID specifico dal sito
+          'input[name="paymentMethodId"][value="104"]', // Credit card option value
+          'input[type="radio"][value="104"]', // Fallback by value  
+          'input[type="radio"][name="paymentMethodId"]' // Generic payment method radio
         ];
         
-        let cardHolderField = null;
-        for (const selector of cardHolderSelectors) {
+        let cardRadioButton = null;
+        for (const selector of cardRadioSelectors) {
           try {
-            cardHolderField = await page.waitForSelector(selector, { timeout: 2000 });
-            if (cardHolderField) {
-              logger.info(`Card holder field found with selector: ${selector}`);
+            cardRadioButton = await page.locator(selector).first();
+            if (await cardRadioButton.isVisible({ timeout: 2000 })) {
+              const isChecked = await cardRadioButton.isChecked();
+              if (!isChecked) {
+                await cardRadioButton.check();
+                logger.info(`Credit card option selected with selector: ${selector}`);
+              }
               break;
             }
           } catch (e) {
@@ -1063,51 +1071,163 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
           }
         }
         
-        if (cardHolderField) {
-          await cardHolderField.fill(bookingData.cardHolder);
-          logger.info('Card holder filled successfully');
-        } else {
+        // STEP 2: Wait for credit card fields to appear after selection
+        logger.info('Waiting for credit card fields to appear...');
+        await page.waitForTimeout(2000); // Give time for fields to show
+        
+        // STEP 3: Fill card holder field
+        const cardHolderSelectors = [
+          'input#_r25_',  // ID specifico
+          'input[name="creditCard.holder"]',
+          'input[aria-labelledby="_r26_"]', // aria-labelledby
+          'input[placeholder*="Titolare"]',
+          'input[placeholder*="titolare"]'
+        ];
+        
+        let cardHolderFilled = false;
+        for (const selector of cardHolderSelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardHolder);
+              logger.info(`Card holder filled with selector: ${selector}`);
+              cardHolderFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!cardHolderFilled) {
           logger.warn('Card holder field not found with any selector');
+          await captureScreenshot(page, 'card-holder-field-not-found');
         }
 
-        const cardRadioButton = await page.locator('input#_r1c_').first();
+        // STEP 4: Fill card number field
+        const cardNumberSelectors = [
+          'input[name="creditCard.number"]',
+          'input[name="cardNumber"]',
+          'input[placeholder*="Numero carta"]',
+          'input[placeholder*="Card number"]',
+          'input[id*="cardNumber"]',
+          'input[maxlength="19"]', // Credit cards with spaces
+          'input[maxlength="16"]'  // Credit cards without spaces
+        ];
+        
+        let cardNumberFilled = false;
+        for (const selector of cardNumberSelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardNumber);
+              logger.info(`Card number filled with selector: ${selector}`);
+              cardNumberFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!cardNumberFilled) {
+          logger.warn('Card number field not found with any selector');
+          await captureScreenshot(page, 'card-number-field-not-found');
+        }
+
+        // STEP 5: Fill card expiry field
+        const expirySelectors = [
+          'input[name="creditCard.expiry"]',
+          'input[name="cardExpiry"]',
+          'input[placeholder*="MM/YY"]',
+          'input[placeholder*="Scadenza"]',
+          'input[id*="expiry"]',
+          'input[maxlength="5"]', // MM/YY format
+          'input[maxlength="7"]'  // MM/YYYY format
+        ];
+        
+        let expiryFilled = false;
+        for (const selector of expirySelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardExpiry);
+              logger.info(`Card expiry filled with selector: ${selector}`);
+              expiryFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!expiryFilled) {
+          logger.warn('Card expiry field not found with any selector');
+          await captureScreenshot(page, 'card-expiry-field-not-found');
+        }
+
+        // STEP 6: Fill CVV field (if provided)
+        if (bookingData.cvv) {
+          const cvvSelectors = [
+            'input[name="creditCard.cvv"]',
+            'input[name="cvv"]',
+            'input[placeholder*="CVV"]',
+            'input[placeholder*="CVC"]',
+            'input[id*="cvv"]',
+            'input[maxlength="3"]',
+            'input[maxlength="4"]'
+          ];
+          
+          let cvvFilled = false;
+          for (const selector of cvvSelectors) {
+            try {
+              const field = await page.locator(selector).first();
+              if (await field.isVisible({ timeout: 3000 })) {
+                await field.fill(bookingData.cvv);
+                logger.info(`CVV filled with selector: ${selector}`);
+                cvvFilled = true;
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          if (!cvvFilled) {
+            logger.warn('CVV field not found (might not be required)');
+          }
+        } else {
+          logger.info('CVV not provided');
+        }
+
+        // STEP 7: Accept terms and conditions
         const termsCheckboxSelectors = [
           'input#_r1v_',
-          'input[name="bookinkAndPrivacyPoliciesAcceptance"]'
+          'input[name="bookinkAndPrivacyPoliciesAcceptance"]',
+          'input[type="checkbox"]:has-text("condizioni")',
+          'input[type="checkbox"]:has-text("terms")',
+          'input[type="checkbox"]:has-text("privacy")'
         ];
 
         let termsCheckbox = null;
         for (const selector of termsCheckboxSelectors) {
           try {
             termsCheckbox = await page.locator(selector).first();
-            if (termsCheckbox) {
-              logger.info(`Terms and privacy checkbox found with selector: ${selector}`);
+            if (await termsCheckbox.isVisible({ timeout: 2000 })) {
+              const isTermsChecked = await termsCheckbox.isChecked();
+              if (!isTermsChecked) {
+                await termsCheckbox.check();
+                logger.info(`Terms accepted with selector: ${selector}`);
+              }
               break;
             }
           } catch (e) {
             continue;
           }
         }
-
-        // CVV non richiesto, quindi rimuoviamo menzione CVV
-
-        if (await cardRadioButton.isVisible({ timeout: 2000 })) {
-          const isChecked = await cardRadioButton.isChecked();
-          if (!isChecked) {
-            await cardRadioButton.check();
-            logger.info('Credit card option selected');
-          }
-        }
-
-        if (termsCheckbox && await termsCheckbox.isVisible({ timeout: 2000 })) {
-          const isTermsChecked = await termsCheckbox.isChecked();
-          if (!isTermsChecked) {
-            await termsCheckbox.check();
-            logger.info('Terms and conditions accepted');
-          }
-        } else {
-          logger.error('Terms and privacy checkbox not found');
-          throw new Error('Could not find terms and privacy checkbox');
+        
+        if (!termsCheckbox) {
+          logger.warn('Terms and privacy checkbox not found');
         }
 
         // Flexible selectors for the booking button
