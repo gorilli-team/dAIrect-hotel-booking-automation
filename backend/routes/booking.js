@@ -277,7 +277,149 @@ async function extractRoomsWithSelectors(page) {
           // Info disponibilità non trovate
         }
         
-        // Trova bottone di prenotazione
+        // Estrai opzioni di prenotazione dal collapse (se espanso)
+        const bookingOptions = [];
+        try {
+          // Cerca il collapse delle opzioni
+          const collapseContainer = roomCard.locator('.roomOptionsCollapse, .ltr-dmxz30');
+          const hasCollapse = await collapseContainer.count() > 0;
+          
+          if (hasCollapse) {
+            logger.info(`Found booking options collapse for room ${i + 1}`);
+            
+            // Estrai tutte le sezioni RateWithOptions
+            const rateOptions = collapseContainer.locator('.RateWithOptions, .e1sl87534');
+            const rateOptionsCount = await rateOptions.count();
+            
+            logger.info(`Found ${rateOptionsCount} rate options in collapse`);
+            
+            for (let rateIdx = 0; rateIdx < rateOptionsCount; rateIdx++) {
+              const rateOption = rateOptions.nth(rateIdx);
+              
+              try {
+                // Estrai nome/titolo della tariffa
+                const rateTitleElement = rateOption.locator('h4.e18qkw5q3 strong, h4 strong').first();
+                const rateTitle = await rateTitleElement.textContent().catch(() => `Tariffa ${rateIdx + 1}`);
+                
+                // Estrai descrizione della tariffa
+                const rateDescElement = rateOption.locator('p.e18qkw5q2, .Paragraph').first();
+                const rateDescription = await rateDescElement.textContent().catch(() => null);
+                
+                // Estrai prezzo della tariffa
+                let ratePrice = '0';
+                const ratePriceElement = rateOption.locator('.mainAmount span, .eiup2eu2 span').first();
+                const ratePriceText = await ratePriceElement.textContent().catch(() => null);
+                
+                if (ratePriceText) {
+                  let cleanedPrice = ratePriceText.replace(/[^0-9,.]/g, '');
+                  // Gestisce formato italiano: 1.701 o 1.956,15
+                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+                    cleanedPrice = cleanedPrice.replace(',', '.');
+                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
+                    const parts = cleanedPrice.split('.');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                      // È un decimale: 123.45
+                      cleanedPrice = cleanedPrice;
+                    } else {
+                      // È un separatore delle migliaia: 1.701
+                      cleanedPrice = cleanedPrice.replace(/\./g, '');
+                    }
+                  }
+                  
+                  const numericPrice = parseFloat(cleanedPrice);
+                  if (!isNaN(numericPrice) && numericPrice > 0) {
+                    ratePrice = numericPrice.toString();
+                  }
+                }
+                
+                // Estrai info sconto se presente
+                let discountInfo = null;
+                const discountElement = rateOption.locator('.discount, .e1f8iu742').first();
+                const discountCount = await discountElement.count();
+                
+                if (discountCount > 0) {
+                  const discountPercent = await discountElement.locator('.percent, .ltr-dsm5ai').textContent().catch(() => null);
+                  const originalPrice = await discountElement.locator('.originalAmount, .ltr-4pyi7h').textContent().catch(() => null);
+                  
+                  if (discountPercent || originalPrice) {
+                    discountInfo = {
+                      percent: discountPercent?.trim(),
+                      originalPrice: originalPrice?.trim()
+                    };
+                  }
+                }
+                
+                // Estrai politica di cancellazione
+                let cancellationPolicy = null;
+                const cancelPolicyElement = rateOption.locator('.Rate__CancellationPolicy, .e18qkw5q0').first();
+                const cancelPolicyText = await cancelPolicyElement.textContent().catch(() => null);
+                
+                if (cancelPolicyText) {
+                  const isRefundable = !cancelPolicyText.toLowerCase().includes('non rimborsabile');
+                  cancellationPolicy = {
+                    text: cancelPolicyText.trim(),
+                    refundable: isRefundable
+                  };
+                }
+                
+                // Estrai tipo di pasto (Camera e Colazione, etc.)
+                let mealPlan = null;
+                const mealPlanElement = rateOption.locator('.e16r10jm5, p b').first();
+                const mealPlanText = await mealPlanElement.textContent().catch(() => null);
+                
+                if (mealPlanText) {
+                  mealPlan = mealPlanText.trim();
+                }
+                
+                // Trova bottone "Prenota" per questa opzione
+                const bookButtonElement = rateOption.locator('.RoomOption_CTA, .e16r10jm0, button:has-text("Prenota")').first();
+                const hasBookButton = await bookButtonElement.count() > 0;
+                
+                let bookSelector = null;
+                if (hasBookButton) {
+                  // Genera selector specifico per questa opzione
+                  bookSelector = `.RoomResultBlock:nth-child(${i + 1}) .RateWithOptions:nth-child(${rateIdx + 1}) .RoomOption_CTA`;
+                }
+                
+                // Estrai badge "Offerta speciale" se presente
+                let specialOffer = false;
+                const specialOfferElement = rateOption.locator('.Badge:has-text("Offerta speciale"), .e1jssjhy1').first();
+                const hasSpecialOffer = await specialOfferElement.count() > 0;
+                if (hasSpecialOffer) {
+                  specialOffer = true;
+                }
+                
+                const bookingOption = {
+                  id: `rate-${i + 1}-${rateIdx + 1}`,
+                  name: rateTitle.trim(),
+                  description: rateDescription ? rateDescription.trim().substring(0, 500) : null,
+                  price: parseFloat(ratePrice),
+                  currency: 'EUR',
+                  mealPlan: mealPlan,
+                  cancellationPolicy: cancellationPolicy,
+                  discountInfo: discountInfo,
+                  specialOffer: specialOffer,
+                  bookSelector: bookSelector,
+                  available: hasBookButton
+                };
+                
+                bookingOptions.push(bookingOption);
+                logger.info(`Extracted booking option: ${bookingOption.name} - €${bookingOption.price}`);
+                
+              } catch (error) {
+                logger.warn(`Failed to extract rate option ${rateIdx + 1} for room ${i + 1}:`, error.message);
+              }
+            }
+          } else {
+            logger.info(`No booking options collapse found for room ${i + 1}`);
+          }
+        } catch (error) {
+          logger.warn(`Failed to extract booking options for room ${i + 1}:`, error.message);
+        }
+        
+        // Trova bottone di prenotazione principale
         const bookButtons = roomCard.locator('.RoomCard_CTA, .ekc2wag2, button:has-text("Info e prenota"), button:has-text("Prenota")');
         const bookButtonCount = await bookButtons.count();
         
@@ -374,7 +516,8 @@ async function extractRoomsWithSelectors(page) {
           available: true,
           limitedAvailability: limitedAvailText,
           availabilityInfo: availabilityInfo, // Detailed availability info
-          images: images // Array di URL delle immagini
+          images: images, // Array di URL delle immagini
+          bookingOptions: bookingOptions // Opzioni di prenotazione estratte dal collapse
         };
         
         // Check for duplicates before adding (simple deduplication by name)

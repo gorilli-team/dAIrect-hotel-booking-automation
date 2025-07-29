@@ -248,6 +248,18 @@ const ImageCarousel = ({ images, roomName }) => {
 }
 
 const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
+  const [expandedRoomId, setExpandedRoomId] = useState(null)
+
+  const handleRoomToggle = (roomId) => {
+    setExpandedRoomId(expandedRoomId === roomId ? null : roomId)
+  }
+
+  const handleOptionSelect = (roomId, option) => {
+    setExpandedRoomId(null)
+    // Chiama la funzione originale di selezione camera con l'opzione scelta
+    onSelectRoom(roomId, option)
+  }
+
   return (
     <div className="card">
       <h2 className="text-2xl font-bold mb-4">Seleziona una camera</h2>
@@ -377,7 +389,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                   {/* Bottone Selezione */}
                   <div className="text-right">
                     <button
-                      onClick={() => onSelectRoom(room.id)}
+                      onClick={() => handleRoomToggle(room.id)}
                       disabled={loading}
                       className="btn-primary px-8 py-3 text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:hover:shadow-lg"
                     >
@@ -385,7 +397,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                         <>
                           <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 718-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
                           Prenotazione in corso...
                         </>
@@ -394,17 +406,136 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                           <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          Seleziona questa Camera
+                          {expandedRoomId === room.id ? 'Chiudi Opzioni' : 'Seleziona questa Camera'}
                         </>
                       )}
                     </button>
                   </div>
                 </div>
               </div>
+              
+              {/* Sezione Collapse con opzioni di prenotazione */}
+              {expandedRoomId === room.id && (
+                <div className="border-t bg-gray-50 p-6 transition-all duration-300 ease-in-out">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    Scegli la tua opzione di prenotazione:
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {room.bookingOptions && room.bookingOptions.length > 0 ? (
+                      room.bookingOptions.map((option) => (
+                        <div key={option.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <h5 className="font-semibold text-gray-800">{option.name}</h5>
+                            {option.specialOffer && (
+                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded">
+                                Offerta
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Prezzo con eventuale sconto */}
+                          <div className="mb-3">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-lg font-bold text-gray-900">€{option.price}</span>
+                              {option.discountInfo && (
+                                <>
+                                  <span className="text-sm text-gray-500 line-through">{option.discountInfo.originalPrice}</span>
+                                  <span className="text-sm text-red-600 font-medium">{option.discountInfo.percent}</span>
+                                </>
+                              )}
+                            </div>
+                            {option.mealPlan && (
+                              <p className="text-xs text-gray-600 mt-1">{option.mealPlan}</p>
+                            )}
+                          </div>
+                          
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+                            {option.description && option.description.length > 100 
+                              ? option.description.substring(0, 100) + '...' 
+                              : option.description
+                            }
+                          </p>
+                          
+                          {/* Politica di cancellazione */}
+                          {option.cancellationPolicy && (
+                            <div className="mb-3">
+                              <div className={`flex items-center text-xs px-2 py-1 rounded-full ${
+                                option.cancellationPolicy.refundable 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  {option.cancellationPolicy.refundable ? (
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  ) : (
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                  )}
+                                </svg>
+                                {option.cancellationPolicy.refundable ? 'Rimborsabile' : 'Non rimborsabile'}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <button
+                            onClick={() => handleOptionSelect(room.id, option.id)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                          >
+                            Prenota €{option.price}
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      // Fallback se non ci sono opzioni di prenotazione estratte
+                      <>
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Standard</h5>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Prenotazione classica con cancellazione gratuita fino a 24h prima del check-in
+                          </p>
+                          <button
+                            onClick={() => handleOptionSelect(room.id, 'standard')}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                          >
+                            Prenota Standard
+                          </button>
+                        </div>
+                        
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Flessibile</h5>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Cancellazione gratuita fino a 1 ora prima del check-in. Modifica date senza costi.
+                          </p>
+                          <button
+                            onClick={() => handleOptionSelect(room.id, 'flexible')}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                          >
+                            Prenota Flessibile
+                          </button>
+                        </div>
+                        
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Economica</h5>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Tariffa scontata non rimborsabile. Pagamento anticipato richiesto.
+                          </p>
+                          <button
+                            onClick={() => handleOptionSelect(room.id, 'economic')}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                          >
+                            Prenota Economica
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+      
     </div>
   )
 }
