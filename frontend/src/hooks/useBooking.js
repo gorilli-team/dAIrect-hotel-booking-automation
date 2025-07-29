@@ -76,7 +76,7 @@ export const useBooking = () => {
     }
   }, [state.sessionId, setLoading, setError, updateState])
 
-  const selectRoom = useCallback(async (roomId) => {
+  const selectRoom = useCallback(async (roomId, optionId = null) => {
     if (!state.sessionId) {
       setError('Nessuna sessione attiva')
       return
@@ -85,7 +85,7 @@ export const useBooking = () => {
     setLoading('Selezione camera in corso...')
 
     try {
-      const response = await bookingService.selectRoom(state.sessionId, roomId)
+      const response = await bookingService.selectRoom(state.sessionId, roomId, optionId)
       const room = state.availableRooms.find(r => r.id === roomId)
 
       updateState({

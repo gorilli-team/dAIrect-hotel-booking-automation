@@ -84,14 +84,22 @@ export const bookingService = {
    * Select a specific room
    * @param {string} sessionId - Session identifier
    * @param {string} roomId - Room identifier
+   * @param {string} optionId - Optional booking option identifier
    * @returns {Promise<Object>} Selection result
    */
-  async selectRoom(sessionId, roomId) {
+  async selectRoom(sessionId, roomId, optionId = null) {
     try {
-      const response = await api.post('/select-room', {
+      const requestData = {
         sessionId,
         roomId
-      })
+      }
+      
+      // Aggiungi optionId solo se specificato
+      if (optionId) {
+        requestData.optionId = optionId
+      }
+      
+      const response = await api.post('/select-room', requestData)
       
       return response
     } catch (error) {

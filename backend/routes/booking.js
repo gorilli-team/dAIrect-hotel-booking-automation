@@ -798,7 +798,7 @@ router.get('/available-rooms/:sessionId', async (req, res) => {
 // POST /api/booking/select-room
 router.post('/select-room', async (req, res) => {
   try {
-    const { sessionId, roomId } = req.body;
+    const { sessionId, roomId, optionId } = req.body;
 
     if (!sessionId || !roomId) {
       return res.status(400).json({
@@ -831,15 +831,13 @@ router.post('/select-room', async (req, res) => {
       selector: selectedRoom.mainBookSelector
     });
 
-    // Use direct selectors to click the "Info e prenota" or "Prenota" button
+    // Use direct selectors to click the "Info e prenota" button (first step)
     const selectors = [
       selectedRoom.mainBookSelector, // Specific selector for this room
       `button:nth-child(${roomId.split('-')[1]}) >> text="Info e prenota"`, // Fallback with room index
-      `button:nth-child(${roomId.split('-')[1]}) >> text="Prenota"`, // Fallback with "Prenota"
       '.RoomCard_CTA', // Generic room booking button
       '.ekc2wag2', // SimpleBooking specific class
       'button:has-text("Info e prenota")', // Generic text search
-      'button:has-text("Prenota")', // Generic "Prenota" search
     ];
 
     let clicked = false;
@@ -849,7 +847,7 @@ router.post('/select-room', async (req, res) => {
       if (!selector) continue;
       
       try {
-        logger.info(`Trying to click room selection with selector: ${selector}`);
+        logger.info(`Trying to click "Info e prenota" with selector: ${selector}`);
         
         // Wait for selector and try to click
         const element = await session.page.waitForSelector(selector, { timeout: 3000 });
@@ -857,7 +855,7 @@ router.post('/select-room', async (req, res) => {
           await element.click();
           clicked = true;
           usedSelector = selector;
-          logger.info(`Successfully clicked room selection button with selector: ${selector}`);
+          logger.info(`Successfully clicked "Info e prenota" button with selector: ${selector}`);
           break;
         }
       } catch (error) {
@@ -866,32 +864,93 @@ router.post('/select-room', async (req, res) => {
     }
 
     if (!clicked) {
-      logger.error('Failed to click any room selection button');
+      logger.error('Failed to click any "Info e prenota" button');
       return res.status(500).json({
         error: 'Failed to select room',
-        message: 'Could not find or click room selection button'
+        message: 'Could not find or click "Info e prenota" button'
       });
+    }
+
+    // Wait for the booking options page to load
+    logger.info('Waiting for booking options page to load...');
+    await session.page.waitForTimeout(3000);
+    
+    // Check if we're on the booking options page with rate selections
+    const bookingOptionsVisible = await session.page.isVisible('.RateWithOptions, .e1sl87534', { timeout: 5000 }).catch(() => false);
+    
+    if (bookingOptionsVisible) {
+      logger.info('✅ Booking options page loaded - found rate options');
+      
+      let rateOptionClicked = false;
+      
+      // Se l'utente ha specificato un'opzione, cerca di usare il selettore specifico
+      if (optionId && selectedRoom.bookingOptions) {
+        const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
+        
+        if (selectedOption && selectedOption.bookSelector) {
+          logger.info(`Trying to click specific option "${selectedOption.name}" with selector: ${selectedOption.bookSelector}`);
+          
+          try {
+            const specificButton = await session.page.waitForSelector(selectedOption.bookSelector, { timeout: 3000 });
+            if (specificButton) {
+              await specificButton.click();
+              rateOptionClicked = true;
+              logger.info(`Successfully clicked specific option "${selectedOption.name}"`);
+            }
+          } catch (error) {
+            logger.warn(`Specific option selector failed: ${error.message}`);
+          }
+        } else {
+          logger.warn(`Option ${optionId} not found in room booking options or missing selector`);
+        }
+      }
+      
+      // Se non è stato possibile cliccare l'opzione specifica, usa il primo bottone disponibile
+      if (!rateOptionClicked) {
+        logger.info('Falling back to first available "Prenota" button');
+        
+        const rateOptionSelectors = [
+          '.RoomOption_CTA.e16r10jm0', // Primary selector for rate option buttons
+          'button.RoomOption_CTA', // Generic rate option button
+          '.RateWithOptions button:has-text("Prenota")', // Prenota button within rate options
+          'button:has-text("Prenota")', // Any Prenota button
+        ];
+        
+        for (const rateSelector of rateOptionSelectors) {
+          try {
+            logger.info(`Trying to click rate option "Prenota" with selector: ${rateSelector}`);
+            
+            const rateButton = await session.page.waitForSelector(rateSelector, { timeout: 3000 });
+            if (rateButton) {
+              await rateButton.click();
+              rateOptionClicked = true;
+              logger.info(`Successfully clicked rate option "Prenota" with selector: ${rateSelector}`);
+              break;
+            }
+          } catch (error) {
+            logger.debug(`Rate selector ${rateSelector} failed: ${error.message}`);
+          }
+        }
+      }
+      
+      if (!rateOptionClicked) {
+        logger.error('Failed to click any rate option "Prenota" button');
+        return res.status(500).json({
+          error: 'Failed to select rate option',
+          message: 'Could not find or click rate option "Prenota" button'
+        });
+      }
+    } else {
+      logger.warn('❌ Booking options page not detected - proceeding anyway');
     }
 
     // Wait for navigation to customer data page
     logger.info('Waiting for navigation to customer data page...');
-    try {
-      await session.page.waitForNavigation({ 
-        waitUntil: 'domcontentloaded', 
-        timeout: 10000 
-      });
-      logger.info('Successfully navigated to customer data page');
-    } catch (error) {
-      logger.warn('Navigation timeout, checking current page content');
-    }
-
-    // Wait for customer data form to load
-    await session.page.waitForTimeout(2000);
+    await session.page.waitForTimeout(5000); // Give more time for navigation
     
     // Check if we're on customer data page by looking for form elements
     const isCustomerDataPage = await session.page.isVisible(
-      'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")', 
-      { timeout: 5000 }
+      'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")' 
     ).catch(() => false);
 
     if (!isCustomerDataPage) {
