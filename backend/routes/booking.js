@@ -1034,20 +1034,23 @@ router.post('/fill-personal-data', async (req, res) => {
       firstName: personalData.firstName
     });
 
-    // Call the new fillPersonalDataPage function
+    // Fill personal data on the page
     const fillResult = await playwrightService.fillPersonalDataPage(
       session.page,
       personalData
     );
 
     if (fillResult.success) {
-      // Update session to payment step
+      // Click the "Continua" button after filling personal data
+      await session.page.click('.CustomerDataCollectionPage_CTA').catch(() => false);
+
+      // Update session - move to payment step
       session.currentStep = 'payment';
       session.personalDataFilled = true;
       session.personalData = personalData;
       session.updatedAt = new Date();
       
-      logger.info('Personal data filled successfully, moved to payment step', {
+      logger.info('Personal data filled successfully and "Continua" button clicked', {
         sessionId,
         email: personalData.email
       });
@@ -1055,9 +1058,9 @@ router.post('/fill-personal-data', async (req, res) => {
       res.json({
         success: true,
         sessionId,
-        message: 'Personal data filled and navigated to payment page',
+        message: 'Personal data filled and "Continua" clicked',
         currentStep: 'payment',
-        nextAction: 'Call /complete-booking to finalize the booking'
+        nextAction: 'Prepare for payment data input'
       });
     } else {
       logger.error('Failed to fill personal data', {

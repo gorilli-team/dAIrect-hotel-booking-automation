@@ -90,7 +90,7 @@ export const useBooking = () => {
 
       updateState({
         selectedRoom: room,
-        currentStep: 'booking',
+        currentStep: 'personal-data', // First step: personal data
         loading: null
       })
 
@@ -101,6 +101,68 @@ export const useBooking = () => {
     }
   }, [state.sessionId, state.availableRooms, setLoading, setError, updateState])
 
+  // Step 1: Fill personal data and click 'Continua'
+  const fillPersonalData = useCallback(async (personalData) => {
+    if (!state.sessionId) {
+      setError('Nessuna sessione attiva')
+      return
+    }
+
+    setLoading('Compilazione dati personali...')
+
+    try {
+      const response = await bookingService.fillPersonalData(state.sessionId, personalData)
+
+      updateState({
+        currentStep: 'payment', // Move to payment step
+        loading: null
+      })
+
+      return response
+    } catch (error) {
+      setError(`Errore durante la compilazione: ${error.message}`)
+      throw error
+    }
+  }, [state.sessionId, setLoading, setError, updateState])
+
+  // Step 2: Complete booking with payment data
+  const completeBooking = useCallback(async (bookingData, testMode = false) => {
+    if (!state.sessionId) {
+      setError('Nessuna sessione attiva')
+      return
+    }
+
+    setLoading('Completamento prenotazione...')
+
+    try {
+      const response = await bookingService.completeBooking(state.sessionId, bookingData, testMode)
+
+      updateState({
+        bookingResult: response,
+        currentStep: 'result',
+        loading: null
+      })
+
+      return response
+    } catch (error) {
+      setError(`Errore durante la prenotazione: ${error.message}`)
+      
+      // Still move to result step to show the error
+      updateState({
+        bookingResult: {
+          success: false,
+          message: error.message,
+          error: error.message
+        },
+        currentStep: 'result',
+        loading: null
+      })
+      
+      throw error
+    }
+  }, [state.sessionId, setLoading, setError, updateState])
+
+  // Legacy method for backward compatibility
   const submitBooking = useCallback(async (room, personalData) => {
     if (!state.sessionId || !room) {
       setError('Dati mancanti per completare la prenotazione')
@@ -179,7 +241,9 @@ export const useBooking = () => {
     startSearch,
     getRooms,
     selectRoom,
-    submitBooking,
+    fillPersonalData,
+    completeBooking,
+    submitBooking, // Legacy
     resetBooking,
     getSessionStatus,
     
