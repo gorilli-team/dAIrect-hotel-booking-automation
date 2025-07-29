@@ -1041,8 +1041,9 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
     if (paymentMethod === 'credit_card') {
       try {
         const cardHolderSelectors = [
-          'input#_r34_', // Selettore fornito per il campo "Titolare carta"
-          'input[name="creditCard.holder"]'
+          'input#_r25_',  // ID specifico
+          'input[name="creditCard.holder"]',
+          'input[aria-labelledby="_r26_"]' // aria-labelledby
         ];
         
         let cardHolderField = null;
@@ -1086,10 +1087,33 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
           }
         }
 
-        const bookButton = await page.locator('button.GuaranteeDataCollectionPage_CTA').first();
-        if (await bookButton.isVisible({ timeout: 2000 })) {
-          await bookButton.click();
-          logger.info('Booking confirmed with Prenota button');
+        // Flexible selectors for the booking button
+        const bookButtonSelectors = [
+          'button.GuaranteeDataCollectionPage_CTA',
+          'button:has-text("Prenota")',
+          '.GuaranteeDataCollectionPage_CTA',
+          'button.CTA:has-text("Prenota")'
+        ];
+
+        let bookingClicked = false;
+        for (const selector of bookButtonSelectors) {
+          try {
+            const bookButton = await page.locator(selector).first();
+            if (await bookButton.isVisible({ timeout: 2000 }) && await bookButton.isEnabled()) {
+              await bookButton.click();
+              logger.info(`Booking confirmed with button: ${selector}`);
+              bookingClicked = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+
+        if (!bookingClicked) {
+          logger.error('Could not find or click booking button');
+          await captureScreenshot(page, 'prenota-button-failed');
+          throw new Error('Could not find enabled booking button');
         }
       } catch (error) {
         logger.error('Failed during payment selection or confirmation:', error);
