@@ -1136,10 +1136,19 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
     
     logger.info('Proceeding with actual booking submission...');
     
-    // Try both possible booking buttons
+    // Try multiple possible booking buttons with more flexible selectors
     const bookingButtons = [
       BOOKING_COMPLETION_SELECTORS.finalBookingButton,
-      BOOKING_COMPLETION_SELECTORS.sidebarBookingButton
+      BOOKING_COMPLETION_SELECTORS.sidebarBookingButton,
+      'button:has-text("Prenota")', // Generic "Prenota" button
+      'button:has-text("Conferma prenotazione")', // "Confirm booking" button
+      'button:has-text("Completa prenotazione")', // "Complete booking" button
+      'button[type="submit"]', // Any submit button
+      '.CTA:has-text("Prenota")', // CTA button with "Prenota" text
+      'button.CTA', // Any CTA button
+      'form button:last-child', // Last button in form (usually submit)
+      'button:contains("Prenota")', // Alternative contains syntax
+      'input[type="submit"]' // Submit input
     ];
     
     let bookingSubmitted = false;
