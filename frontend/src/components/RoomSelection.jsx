@@ -279,7 +279,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                     
                     {/* Blocco Prezzo Completo */}
                     {room.priceBlock ? (
-                      <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 shadow-sm">
+                      <div className="mb-4">
                         <PriceBlockDisplay priceBlockHtml={room.priceBlock.html} />
                       </div>
                     ) : (
