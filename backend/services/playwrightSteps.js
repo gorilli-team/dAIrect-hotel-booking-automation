@@ -9,34 +9,35 @@ const {
   BOOKING_COMPLETION_SELECTORS
 } = require('./aiSelector');
 
-let browserInstance;
+// Remove shared browser instance to prevent session conflicts
+// Each session will have its own browser instance
 
 async function initBrowser() {
-  logger.info('Initializing Playwright browser');
+  logger.info('Initializing new Playwright browser instance');
   
-  // Launch a new browser if not already done
-  if (!browserInstance) {
-    browserInstance = await chromium.launch({
-      headless: process.env.HEADLESS !== 'false',
-      slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
-      args: [
-        '--no-sandbox',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-dev-shm-usage',
-        '--disable-ipc-flooding-protection',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-camera',
-        '--disable-microphone',
-        '--deny-permission-prompts',
-        '--disable-permissions-api',
-        '--block-new-web-contents'
-      ]
-    });
-  }
-  return browserInstance;
+  // Always create a new browser instance for each session
+  const browser = await chromium.launch({
+    headless: process.env.HEADLESS !== 'false',
+    slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
+    args: [
+      '--no-sandbox',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-dev-shm-usage',
+      '--disable-ipc-flooding-protection',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-camera',
+      '--disable-microphone',
+      '--deny-permission-prompts',
+      '--disable-permissions-api',
+      '--block-new-web-contents'
+    ]
+  });
+  
+  logger.info('New browser instance created successfully');
+  return browser;
 }
 
 // Improved date selection using real DOM structure

@@ -614,9 +614,41 @@ router.post('/start-search', async (req, res) => {
       children
     });
 
-    // Initialize Playwright session
-    const browser = await playwrightService.initBrowser();
-    const page = await playwrightService.createPage(browser);
+    // Initialize Playwright session with new browser instance
+    let browser = null;
+    let page = null;
+    
+    try {
+      browser = await playwrightService.initBrowser();
+      page = await playwrightService.createPage(browser);
+    } catch (browserError) {
+      logger.error('Failed to initialize browser:', browserError);
+      return res.status(500).json({
+        error: 'Browser initialization failed',
+        message: 'Could not start browser session. Please try again.'
+      });
+    }
+
+    // Validate browser and page before storing session
+    if (!browser || !page) {
+      logger.error('Browser or page is null after initialization');
+      return res.status(500).json({
+        error: 'Browser session invalid',
+        message: 'Failed to create valid browser session'
+      });
+    }
+    
+    // Test browser connectivity
+    try {
+      await page.goto('about:blank', { timeout: 5000 });
+    } catch (connectError) {
+      logger.error('Browser connectivity test failed:', connectError);
+      await playwrightService.cleanup(browser);
+      return res.status(500).json({
+        error: 'Browser connectivity failed',
+        message: 'Could not establish browser connection'
+      });
+    }
 
     // Store session data
     sessions.set(sessionId, {
@@ -625,7 +657,8 @@ router.post('/start-search', async (req, res) => {
       page,
       searchParams: { checkinDate, checkoutDate, adults, children },
       currentStep: 'search',
-      createdAt: new Date()
+      createdAt: new Date(),
+      lastActivity: new Date()
     });
 
     // Costruisce URL diretto con parametri di ricerca
@@ -703,6 +736,30 @@ router.get('/available-rooms/:sessionId', async (req, res) => {
       return res.status(404).json({
         error: 'Session not found',
         message: 'Invalid or expired session ID'
+      });
+    }
+
+    // Validate session browser and page
+    if (!session.browser || !session.page) {
+      logger.error(`Session ${sessionId} has invalid browser or page`);
+      sessions.delete(sessionId);
+      return res.status(400).json({
+        error: 'Invalid session state',
+        message: 'Browser session is no longer valid. Please start a new search.'
+      });
+    }
+
+    // Test if browser is still connected
+    try {
+      await session.page.url();
+      session.lastActivity = new Date();
+    } catch (browserError) {
+      logger.error(`Browser disconnected for session ${sessionId}:`, browserError);
+      await playwrightService.cleanup(session.browser).catch(() => {});
+      sessions.delete(sessionId);
+      return res.status(400).json({
+        error: 'Browser session expired',
+        message: 'Your browser session has expired. Please start a new search.'
       });
     }
 
