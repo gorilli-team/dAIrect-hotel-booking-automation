@@ -142,8 +142,7 @@ export const bookingService = {
           paymentMethod: 'credit_card',
           cardNumber: bookingData.cardNumber?.replace(/\s/g, ''), // Remove spaces
           cardExpiry: bookingData.cardExpiry,
-          cvv: bookingData.cvv,
-          cardHolder: bookingData.cardHolder,
+          cardHolder: bookingData.cardHolder, // Campo titolare carta richiesto
           acceptNewsletter: bookingData.acceptNewsletter || false
         },
         testMode
@@ -180,8 +179,7 @@ export const bookingService = {
         phone: personalData.phone,
         cardNumber: personalData.cardNumber,
         cardExpiry: `${personalData.expiryMonth}/${personalData.expiryYear.slice(-2)}`, // Convert to MM/YY
-        cvv: personalData.cvv,
-        cardHolder: `${personalData.firstName} ${personalData.lastName}`,
+        cardHolder: personalData.cardHolder, // Usa il campo titolare carta dal form
         acceptNewsletter: personalData.acceptNewsletter || false
       }
       

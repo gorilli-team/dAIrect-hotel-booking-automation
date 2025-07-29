@@ -10,7 +10,7 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
     cardNumber: '4111111111111111',
     expiryMonth: '12',
     expiryYear: '2026',
-    cvv: '123'
+    cardHolder: 'Mario Rossi' // Campo titolare carta richiesto
   })
 
   const [errors, setErrors] = useState({})
@@ -42,10 +42,8 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
       newErrors.cardNumber = 'Numero carta deve essere di 16 cifre'
     }
 
-    if (!formData.cvv.trim()) {
-      newErrors.cvv = 'CVV richiesto'
-    } else if (!/^\d{3,4}$/.test(formData.cvv)) {
-      newErrors.cvv = 'CVV deve essere di 3 o 4 cifre'
+    if (!formData.cardHolder.trim()) {
+      newErrors.cardHolder = 'Titolare carta richiesto'
     }
 
     setErrors(newErrors)
@@ -210,10 +208,26 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mt-4">
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Titolare carta *
+            </label>
+            <input
+              type="text"
+              className={`input-field ${errors.cardHolder ? 'border-red-500' : ''}`}
+              value={formData.cardHolder}
+              onChange={(e) => handleChange('cardHolder', e.target.value)}
+              placeholder="Mario Rossi"
+            />
+            {errors.cardHolder && (
+              <p className="text-red-500 text-sm mt-1">{errors.cardHolder}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mese *
+                Mese scadenza *
               </label>
               <select
                 className="input-field"
@@ -233,7 +247,7 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Anno *
+                Anno scadenza *
               </label>
               <select
                 className="input-field"
@@ -249,23 +263,6 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
                   )
                 })}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                CVV *
-              </label>
-              <input
-                type="text"
-                className={`input-field ${errors.cvv ? 'border-red-500' : ''}`}
-                value={formData.cvv}
-                onChange={(e) => handleChange('cvv', e.target.value)}
-                placeholder="123"
-                maxLength="4"
-              />
-              {errors.cvv && (
-                <p className="text-red-500 text-sm mt-1">{errors.cvv}</p>
-              )}
             </div>
           </div>
         </div>

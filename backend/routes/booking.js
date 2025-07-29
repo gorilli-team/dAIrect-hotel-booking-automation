@@ -1138,8 +1138,7 @@ router.post('/complete-booking', async (req, res) => {
       paymentMethod: Joi.string().valid('credit_card', 'bank_transfer').default('credit_card'),
       cardNumber: Joi.string().optional(),
       cardExpiry: Joi.string().optional(), // MM/YY format
-      cvv: Joi.string().optional(),
-      cardHolder: Joi.string().optional(),
+      cardHolder: Joi.string().required(), // Campo titolare carta richiesto
       acceptNewsletter: Joi.boolean().default(false)
     }).required(),
     testMode: Joi.boolean().default(false) // IMPORTANT: prevents actual payment

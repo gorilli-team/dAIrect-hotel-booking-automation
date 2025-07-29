@@ -1156,9 +1156,36 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
     
     if (paymentMethod === 'credit_card') {
       try {
+        const cardHolderSelectors = [
+          'input#_r34_', // Selettore fornito per il campo "Titolare carta"
+          'input[name="creditCard.holder"]'
+        ];
+        
+        let cardHolderField = null;
+        for (const selector of cardHolderSelectors) {
+          try {
+            cardHolderField = await page.waitForSelector(selector, { timeout: 2000 });
+            if (cardHolderField) {
+              logger.info(`Card holder field found with selector: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (cardHolderField) {
+          await cardHolderField.fill(bookingData.cardHolder);
+          logger.info('Card holder filled successfully');
+        } else {
+          logger.warn('Card holder field not found with any selector');
+        }
+
         const cardRadioButton = await page.locator('input#_r1c_').first();
         const termsCheckbox = await page.locator('input#_r1j_').first();
-        
+
+        // CVV non richiesto, quindi rimuoviamo menzione CVV
+
         if (await cardRadioButton.isVisible({ timeout: 2000 })) {
           const isChecked = await cardRadioButton.isChecked();
           if (!isChecked) {
