@@ -1,4 +1,103 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+
+// Componente per visualizzare le informazioni della camera con styling personalizzato
+const RoomInfoDisplay = ({ roomInfoHtml }) => {
+  const containerRef = useRef(null)
+  
+  useEffect(() => {
+    if (containerRef.current) {
+      // Applica gli stili personalizzati dopo che il componente è montato
+      const container = containerRef.current
+      
+      // Stile principale del container
+      container.style.display = 'flex'
+      container.style.alignItems = 'center'
+      container.style.gap = '1.5rem'
+      container.style.flexWrap = 'wrap'
+      
+      // Stili per .RoomFeature (dimensioni camera)
+      const roomFeatures = container.querySelectorAll('.RoomFeature')
+      roomFeatures.forEach(feature => {
+        feature.style.display = 'flex'
+        feature.style.alignItems = 'center'
+        feature.style.gap = '0.5rem'
+        feature.style.background = 'white'
+        feature.style.padding = '0.5rem 0.75rem'
+        feature.style.borderRadius = '0.75rem'
+        feature.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+        feature.style.border = '1px solid #e5e7eb'
+      })
+      
+      // Stili per le icone SVG
+      const svgs = container.querySelectorAll('svg')
+      svgs.forEach(svg => {
+        svg.style.width = '18px'
+        svg.style.height = '18px'
+        svg.style.flexShrink = '0'
+        
+        if (svg.getAttribute('title') === 'ruler') {
+          svg.style.color = '#3b82f6' // blue-500
+        } else if (svg.getAttribute('title') === 'adult') {
+          svg.style.color = '#059669' // emerald-600
+        } else if (svg.getAttribute('title') === 'crib') {
+          svg.style.color = '#dc2626' // red-600
+        }
+      })
+      
+      // Stili per il testo delle dimensioni e ospiti
+      const textElements = container.querySelectorAll('.ltr-zswzrr')
+      textElements.forEach(text => {
+        text.style.fontWeight = '600'
+        text.style.color = '#374151'
+        text.style.fontSize = '14px'
+      })
+      
+      // Stili per il gruppo ospiti [role="group"]
+      const guestGroups = container.querySelectorAll('[role="group"]')
+      guestGroups.forEach(group => {
+        group.style.display = 'flex'
+        group.style.alignItems = 'center'
+        group.style.gap = '0.75rem'
+        group.style.background = 'white'
+        group.style.padding = '0.5rem 0.75rem'
+        group.style.borderRadius = '0.75rem'
+        group.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+        group.style.border = '1px solid #e5e7eb'
+        
+        // Stili per i paragrafi all'interno del gruppo
+        const paragraphs = group.querySelectorAll('p')
+        paragraphs.forEach(p => {
+          p.style.margin = '0'
+          p.style.fontWeight = '600'
+          p.style.color = '#374151'
+          p.style.fontSize = '14px'
+          p.style.whiteSpace = 'nowrap'
+        })
+        
+        // Stili per i contenitori delle icone ospiti
+        const guestIconContainers = group.querySelectorAll('.ltr-zswzrr')
+        guestIconContainers.forEach(container => {
+          container.style.display = 'flex'
+          container.style.alignItems = 'center'
+          container.style.gap = '0.25rem'
+        })
+      })
+      
+      // Nascondi elementi di spacing inutili
+      const hideElements = container.querySelectorAll('.ltr-jea9ee, .tether-target, span[style*="flex-shrink"]')
+      hideElements.forEach(el => {
+        el.style.display = 'none'
+      })
+    }
+  }, [roomInfoHtml])
+  
+  return (
+    <div 
+      ref={containerRef}
+      dangerouslySetInnerHTML={{ __html: roomInfoHtml }}
+    />
+  )
+}
 
 // Componente Carousel per le immagini delle camere
 const ImageCarousel = ({ images, roomName }) => {
@@ -109,102 +208,29 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                     </h3>
                     
                     {/* Prezzo */}
-                    <div className="mb-3">
-                      <span className="text-3xl font-bold text-blue-600">
-                        €{room.price}
-                      </span>
-                      <span className="text-gray-500 ml-2">per notte</span>
+                    <div className="mb-4">
+                      <div className="mb-3">
+                        <span className="text-3xl font-bold text-blue-600">
+                          €{room.price}
+                        </span>
+                        <span className="text-gray-500 ml-2">per notte</span>
+                      </div>
+                      
+                      {/* Blocco informazioni camera con styling migliorato */}
+                      {room.roomInfoBlock && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 shadow-sm">
+                          <RoomInfoDisplay roomInfoHtml={room.roomInfoBlock.html} />
+                        </div>
+                      )}
                     </div>
                     
-                    {/* Informazioni Camera */}
-                    {(room.roomSize || room.guestCapacity) && (
-                      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-700">
-                          {room.roomSize && (
-                            <div className="flex items-center">
-                              <svg className="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm8 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V8z" clipRule="evenodd" />
-                              </svg>
-                              <span className="font-medium">{room.roomSize}</span>
-                            </div>
-                          )}
-                          {room.guestCapacity && (
-                            <div className="flex items-center">
-                              <svg className="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                              </svg>
-                              <div className="flex items-center gap-2">
-                                {/* Parser intelligente per adult/crib */}
-                                {(() => {
-                                  const text = room.guestCapacity;
-                                  
-                                  // Estrai "Max ospiti:"
-                                  const prefixMatch = text.match(/^[^:]*:/);
-                                  const prefix = prefixMatch ? prefixMatch[0] + ' ' : '';
-                                  
-                                  let totalAdults = 0;
-                                  let totalCribs = 0;
-                                  
-                                  // Pattern per adult/adult[numero]
-                                  const adultMatches = text.match(/adult(\d*)/g) || [];
-                                  adultMatches.forEach(match => {
-                                    const numberMatch = match.match(/adult(\d+)/);
-                                    if (numberMatch) {
-                                      totalAdults += parseInt(numberMatch[1]);
-                                    } else {
-                                      totalAdults += 1; // solo "adult" = 1 adulto
-                                    }
-                                  });
-                                  
-                                  // Pattern per crib/crib[numero]
-                                  const cribMatches = text.match(/crib(\d*)/g) || [];
-                                  cribMatches.forEach(match => {
-                                    const numberMatch = match.match(/crib(\d+)/);
-                                    if (numberMatch) {
-                                      totalCribs += parseInt(numberMatch[1]);
-                                    } else {
-                                      totalCribs += 1; // solo "crib" = 1 culla
-                                    }
-                                  });
-                                  
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium">{prefix}</span>
-                                      
-                                      {/* Adulti: numero + icona */}
-                                      {totalAdults > 0 && (
-                                        <div className="flex items-center gap-1">
-                                          <span className="font-medium text-blue-600">{totalAdults}</span>
-                                          <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                                          </svg>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Culle: numero + icona */}
-                                      {totalCribs > 0 && (
-                                        <div className="flex items-center gap-1">
-                                          <span className="font-medium text-pink-500">{totalCribs}</span>
-                                          <svg className="w-4 h-4 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M6 18h12v-2c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v2zm14-8h-2V8c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v6h2v-2h16v2h2v-6c0-1.1-.9-2-2-2z"/>
-                                          </svg>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Descrizione */}
+                    {/* Descrizione - subito dopo prezzo/mq/max persone */}
                     {room.description && (
-                      <p className="text-gray-700 mb-4 leading-relaxed">
-                        {room.description}
-                      </p>
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+                        <p className="text-gray-800 text-sm leading-relaxed italic">
+                          {room.description}
+                        </p>
+                      </div>
                     )}
                     
                     {/* Features/Servizi */}
@@ -228,15 +254,44 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                     </div>
                     
                     {/* Disponibilità limitata */}
-                    {room.limitedAvailability && (
+                    {(room.availabilityInfo || room.limitedAvailability) && (
                       <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                        <div className="flex items-center">
-                          <svg className="w-5 h-5 text-orange-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-orange-800 text-sm font-medium">
-                            {room.limitedAvailability}
-                          </span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-orange-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                              {room.availabilityInfo ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-orange-800 text-sm font-medium">
+                                    {room.availabilityInfo.description || 'Disponibilità limitata'}
+                                  </span>
+                                  {room.availabilityInfo.remaining && (
+                                    <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-bold">
+                                      {room.availabilityInfo.remaining} rimaste
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-orange-800 text-sm font-medium">
+                                  {room.limitedAvailability}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Urgency indicator */}
+                          {room.availabilityInfo && room.availabilityInfo.remaining <= 2 && (
+                            <div className="flex items-center">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 animate-pulse">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                Pochissime rimaste!
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

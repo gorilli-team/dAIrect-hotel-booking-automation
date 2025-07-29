@@ -138,9 +138,114 @@ async function extractRoomsWithSelectors(page) {
           }
         }
         
-        // Estrai descrizione
-        const descElement = roomCard.locator('.ekc2wag6, .RoomCard .Paragraph').first();
-        const description = await descElement.textContent().catch(() => 'Camera disponibile');
+        // Estrai descrizione dal selettore specifico (solo quello corretto)
+        let description = 'Camera disponibile';
+        try {
+          const descElement = roomCard.locator('.ekc2wag7 .ekc2wag6').first();
+          const rawDescription = await descElement.textContent().catch(() => null);
+          
+          if (rawDescription && rawDescription.trim()) {
+            // Pulisci la descrizione da elementi indesiderati
+            description = rawDescription.trim()
+              .replace(/^Slide \d+ di \d+.*?ruler/g, '') // Rimuovi "Slide 1 di 8...ruler"
+              .replace(/^\d+ m².*?ruler/g, '') // Rimuovi "28 m²...ruler"
+              .replace(/chevron-left.*?chevron-right/g, '') // Rimuovi navigazione
+              .replace(/^\d+ \/ \d+/g, '') // Rimuovi "1 / 8"
+              .replace(/ruler\d+\s*m²/g, '') // Rimuovi "ruler45 m²"
+              .replace(/Max ospiti:.*?crib\d+/g, '') // Rimuovi info ospiti
+              .replace(/adult\d+/g, '') // Rimuovi "adult5"
+              .replace(/crib\d+/g, '') // Rimuovi "crib1"
+              .replace(/snow|volume|terrace|tree|help-circle|building|wifi/g, '') // Rimuovi icone
+              .replace(/Aria condizionata|Insonorizzazione|Balcone|Vista|Vista luogo di interesse|Vista città|Wi-Fi Free/g, '') // Rimuovi features
+              .replace(/Vedi di più/g, '') // Rimuovi "Vedi di più"
+              .replace(/Ne resta solo \d+|Ne restano solo \d+/g, '') // Rimuovi disponibilità
+              .replace(/A partire da.*?Info e prenota/g, '') // Rimuovi prezzo e bottone
+              .replace(/chevron-up.*?Offerta speciale/g, '') // Rimuovi offerta speciale
+              .replace(/tag/g, '') // Rimuovi "tag"
+              .replace(/\s+/g, ' ') // Normalizza spazi
+              .trim();
+              
+            if (description.length > 10) { // Solo se abbiamo una descrizione valida
+              logger.info(`Clean description extracted: ${description}`);
+            } else {
+              description = 'Camera disponibile';
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to extract description:', error.message);
+        }
+        
+        // Estrai blocco completo dimensioni + ospiti dal selettore .ekc2wag8
+        let roomInfoBlock = null;
+        try {
+          const infoBlockElement = roomCard.locator('.ekc2wag8.ltr-1f91znd.e3a2zab1').first();
+          const infoBlockHtml = await infoBlockElement.innerHTML().catch(() => null);
+          
+          if (infoBlockHtml) {
+            // Estrai anche il testo leggibile per informazioni separate
+            const infoBlockText = await infoBlockElement.textContent().catch(() => null);
+            
+            roomInfoBlock = {
+              html: infoBlockHtml,
+              text: infoBlockText ? infoBlockText.trim() : null
+            };
+            
+            logger.info(`Found room info block: ${infoBlockText}`);
+          }
+        } catch (error) {
+          logger.warn('Failed to extract room info block:', error.message);
+        }
+        
+        // Estrai caratteristiche dettagliate della camera (escludi dimensioni)
+        const detailedFeatures = [];
+        try {
+          // Trova tutti gli elementi RoomFeature nella sezione caratteristiche
+          const featureElements = roomCard.locator('.RoomFeature .ltr-zswzrr');
+          const featureCount = await featureElements.count();
+          
+          for (let featIdx = 0; featIdx < featureCount; featIdx++) {
+            const featureEl = featureElements.nth(featIdx);
+            const featureText = await featureEl.textContent().catch(() => null);
+            
+            if (featureText && featureText.trim()) {
+              const cleanFeatureText = featureText.trim();
+              
+              // Escludi le dimensioni dalle features (già estratte in roomSize)
+              if (!cleanFeatureText.match(/^\d+\s*m²$/)) {
+                detailedFeatures.push(cleanFeatureText);
+              }
+            }
+          }
+          
+          logger.info(`Found ${detailedFeatures.length} detailed features (excluding room size):`, detailedFeatures);
+        } catch (error) {
+          logger.warn('Failed to extract detailed features:', error.message);
+        }
+        
+        // Estrai disponibilità limitata con più dettagli
+        let availabilityInfo = null;
+        try {
+          const availElement = roomCard.locator('.enongdq2, .enongdq1, .enongdq0');
+          
+          // Prova a ottenere il numero rimasto
+          const numberElement = roomCard.locator('.enongdq1');
+          const numberText = await numberElement.textContent().catch(() => null);
+          
+          // Prova a ottenere il testo descrittivo
+          const descElement = roomCard.locator('.enongdq0');
+          const descText = await descElement.textContent().catch(() => null);
+          
+          if (numberText || descText) {
+            availabilityInfo = {
+              remaining: numberText ? parseInt(numberText) : null,
+              description: descText || null,
+              isLimited: true
+            };
+            logger.info(`Found availability info:`, availabilityInfo);
+          }
+        } catch (error) {
+          // Info disponibilità non trovate
+        }
         
         // Trova bottone di prenotazione
         const bookButtons = roomCard.locator('.RoomCard_CTA, .ekc2wag2, button:has-text("Info e prenota"), button:has-text("Prenota")');
@@ -231,11 +336,13 @@ async function extractRoomsWithSelectors(page) {
           name: title.trim(),
           price: parseInt(price) || 99,
           currency: 'EUR',
-          description: description.trim().substring(0, 100),
-          features: ['WiFi gratuito', 'Aria condizionata'],
+          description: description.trim().substring(0, 200), // Increased length for longer descriptions
+          features: detailedFeatures.length > 0 ? detailedFeatures : ['WiFi gratuito', 'Aria condizionata'], // Use extracted features
+          roomInfoBlock: roomInfoBlock, // Blocco HTML completo con dimensioni + ospiti
           mainBookSelector,
           available: true,
           limitedAvailability: limitedAvailText,
+          availabilityInfo: availabilityInfo, // Detailed availability info
           images: images // Array di URL delle immagini
         };
         
