@@ -1,36 +1,19 @@
 import React, { useState } from 'react'
-import { User, Mail, Phone, CreditCard, ArrowLeft } from 'lucide-react'
+import { Phone, CreditCard, ArrowLeft } from 'lucide-react'
 
-const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
+const PaymentForm = ({ room, onSubmit, onBack, loading }) => {
   const [formData, setFormData] = useState({
-    firstName: 'Mario',
-    lastName: 'Rossi',
-    email: 'mario.rossi@example.com',
-    phone: '+39 123 456 7890',
-    cardNumber: '4111111111111111',
-    expiryMonth: '12',
-    expiryYear: '2026',
-    cardHolder: 'Mario Rossi' // Campo titolare carta richiesto
+    phone: '3246987461',
+    cardNumber: '4444333322221111',
+    expiryMonth: '06',
+    expiryYear: '2027',
+    cardHolder: 'Prova Takyon' // Campo titolare carta richiesto
   })
 
   const [errors, setErrors] = useState({})
 
   const validateForm = () => {
     const newErrors = {}
-
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'Nome richiesto'
-    }
-
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Cognome richiesto'
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email richiesta'
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email non valida'
-    }
 
     if (!formData.phone.trim()) {
       newErrors.phone = 'Telefono richiesto'
@@ -89,7 +72,7 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-2xl font-bold">Dati di prenotazione</h2>
+        <h2 className="text-2xl font-bold">Dati di pagamento</h2>
       </div>
 
       {/* Room Summary */}
@@ -98,69 +81,15 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
         <p className="text-blue-800">
           <strong>{room.name}</strong> - {room.price} {room.currency}/notte
         </p>
-        <p className="text-sm text-blue-600 mt-1">
-          Check-in: {searchParams.checkinDate} | Check-out: {searchParams.checkoutDate}
-        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Personal Information */}
+        {/* Contact Information */}
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <User className="h-5 w-5 mr-2" />
-            Dati personali
+            <Phone className="h-5 w-5 mr-2" />
+            Numero di telefono
           </h3>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome *
-              </label>
-              <input
-                type="text"
-                className={`input-field ${errors.firstName ? 'border-red-500' : ''}`}
-                value={formData.firstName}
-                onChange={(e) => handleChange('firstName', e.target.value)}
-                placeholder="Mario"
-              />
-              {errors.firstName && (
-                <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cognome *
-              </label>
-              <input
-                type="text"
-                className={`input-field ${errors.lastName ? 'border-red-500' : ''}`}
-                value={formData.lastName}
-                onChange={(e) => handleChange('lastName', e.target.value)}
-                placeholder="Rossi"
-              />
-              {errors.lastName && (
-                <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="inline h-4 w-4 mr-1" />
-              Email *
-            </label>
-            <input
-              type="email"
-              className={`input-field ${errors.email ? 'border-red-500' : ''}`}
-              value={formData.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              placeholder="mario.rossi@example.com"
-            />
-            {errors.email && (
-              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-            )}
-          </div>
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -184,12 +113,8 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <CreditCard className="h-5 w-5 mr-2" />
-            Dati di pagamento
+            Dettagli della carta
           </h3>
-
-          <div className="bg-yellow-50 p-3 rounded-lg mb-4 text-sm">
-            ⚠️ <strong>Nota:</strong> Questa è una simulazione. Usa i dati di test precompilati.
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -205,22 +130,6 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
             />
             {errors.cardNumber && (
               <p className="text-red-500 text-sm mt-1">{errors.cardNumber}</p>
-            )}
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Titolare carta *
-            </label>
-            <input
-              type="text"
-              className={`input-field ${errors.cardHolder ? 'border-red-500' : ''}`}
-              value={formData.cardHolder}
-              onChange={(e) => handleChange('cardHolder', e.target.value)}
-              placeholder="Mario Rossi"
-            />
-            {errors.cardHolder && (
-              <p className="text-red-500 text-sm mt-1">{errors.cardHolder}</p>
             )}
           </div>
 
@@ -265,13 +174,28 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
               </select>
             </div>
           </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Titolare carta *
+            </label>
+            <input
+              type="text"
+              className={`input-field ${errors.cardHolder ? 'border-red-500' : ''}`}
+              value={formData.cardHolder}
+              onChange={(e) => handleChange('cardHolder', e.target.value)}
+              placeholder="Mario Rossi"
+            />
+            {errors.cardHolder && (
+              <p className="text-red-500 text-sm mt-1">{errors.cardHolder}</p>
+            )}
+          </div>
         </div>
 
         {/* Terms */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <p className="text-xs text-gray-600">
-            Procedendo con la prenotazione, accetti automaticamente i termini e condizioni dell'hotel.
-            Questa è una simulazione e non verrà effettuato alcun pagamento reale.
+            Procedendo con il pagamento, confermi di accettare i termini e le condizioni dell'hotel.
           </p>
         </div>
 
@@ -282,11 +206,12 @@ const BookingForm = ({ room, searchParams, onSubmit, onBack, loading }) => {
           className="w-full btn-primary flex items-center justify-center space-x-2"
         >
           <CreditCard className="h-5 w-5" />
-          <span>{loading ? 'Prenotazione in corso...' : 'Completa Prenotazione'}</span>
+          <span>{loading ? 'Elaborazione...' : 'Completa pagamento'}</span>
         </button>
       </form>
     </div>
   )
 }
 
-export default BookingForm
+export default PaymentForm
+

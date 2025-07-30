@@ -17,13 +17,11 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
     if (initialData) {
       setFormData(initialData)
     } else {
-      const today = moment()
-      const tomorrow = moment().add(1, 'day')
-      
+      // Use preset test dates for faster testing
       setFormData(prev => ({
         ...prev,
-        checkinDate: today.format('YYYY-MM-DD'),
-        checkoutDate: tomorrow.format('YYYY-MM-DD')
+        checkinDate: '2026-02-06',
+        checkoutDate: '2026-02-08'
       }))
     }
   }, [initialData])

@@ -9,34 +9,35 @@ const {
   BOOKING_COMPLETION_SELECTORS
 } = require('./aiSelector');
 
-let browserInstance;
+// Remove shared browser instance to prevent session conflicts
+// Each session will have its own browser instance
 
 async function initBrowser() {
-  logger.info('Initializing Playwright browser');
+  logger.info('Initializing new Playwright browser instance');
   
-  // Launch a new browser if not already done
-  if (!browserInstance) {
-    browserInstance = await chromium.launch({
-      headless: process.env.HEADLESS !== 'false',
-      slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
-      args: [
-        '--no-sandbox',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-dev-shm-usage',
-        '--disable-ipc-flooding-protection',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-camera',
-        '--disable-microphone',
-        '--deny-permission-prompts',
-        '--disable-permissions-api',
-        '--block-new-web-contents'
-      ]
-    });
-  }
-  return browserInstance;
+  // Always create a new browser instance for each session
+  const browser = await chromium.launch({
+    headless: process.env.HEADLESS !== 'false',
+    slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
+    args: [
+      '--no-sandbox',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-dev-shm-usage',
+      '--disable-ipc-flooding-protection',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-camera',
+      '--disable-microphone',
+      '--deny-permission-prompts',
+      '--disable-permissions-api',
+      '--block-new-web-contents'
+    ]
+  });
+  
+  logger.info('New browser instance created successfully');
+  return browser;
 }
 
 // Improved date selection using real DOM structure
@@ -896,124 +897,8 @@ async function fillPersonalDataPage(page, personalData) {
       }
     }
     
-    // Take screenshot before clicking continue
+    // Take screenshot after filling personal data (before user clicks 'Continua')
     await captureScreenshot(page, 'personal-data-filled');
-    
-    // 7. Click "Continua" button to proceed to payment page
-    const continueSelectors = [
-      'button.CustomerDataCollectionPage_CTA.CTA', // Selettore specifico fornito dall'utente
-      'button.CustomerDataCollectionPage_CTA',
-      '.CustomerDataCollectionPage_CTA.CTA',
-      '.CustomerDataCollectionPage_CTA',
-      'button:has-text("Continua")',
-      'button:has-text("CONTINUA")', // Variante maiuscola
-      'a:has-text("Continua")', // Potrebbe essere un link
-      'input[value="Continua"]', // Potrebbe essere un input
-      '[class*="CTA"][class*="CustomerData"]', // Qualsiasi elemento con CTA e CustomerData
-      'button[type="submit"]',
-      'form button:last-of-type', // Ultimo bottone del form
-      '[role="button"]:has-text("Continua")', // Elemento con role button
-      '.CTA', // Generico CTA
-    ];
-    
-    let continueClicked = false;
-    
-    for (const selector of continueSelectors) {
-      try {
-        const button = await page.locator(selector).first();
-        if (await button.isVisible({ timeout: 3000 })) {
-          await button.click();
-          logger.info('Continue button clicked with selector:', selector);
-          continueClicked = true;
-          break;
-        }
-      } catch (e) {
-        continue;
-      }
-    }
-    
-    if (!continueClicked) {
-      // DEBUG AVANZATO: Analizziamo la pagina per capire cosa c'è
-      logger.error('Could not find continue button. Analyzing page content...');
-      
-      const pageTitle = await page.title();
-      const pageUrl = page.url();
-      const pageContent = await page.content();
-      
-      logger.info('DEBUG - Page analysis:', {
-        title: pageTitle,
-        url: pageUrl,
-        contentLength: pageContent.length,
-        hasForm: pageContent.includes('<form'),
-        hasButton: pageContent.includes('<button'),
-        hasContinua: pageContent.includes('Continua') || pageContent.includes('CONTINUA'),
-        hasCTA: pageContent.includes('CTA'),
-        hasCustomerData: pageContent.includes('CustomerData')
-      });
-      
-      // Cerca tutti i bottoni sulla pagina
-      const allButtons = await page.locator('button, input[type="button"], input[type="submit"], a[role="button"]').all();
-      logger.info(`Found ${allButtons.length} interactive elements on page`);
-      
-      for (let i = 0; i < Math.min(allButtons.length, 10); i++) { // Limita a 10 per non spammare i log
-        try {
-          const element = allButtons[i];
-          const tagName = await element.evaluate(el => el.tagName);
-          const text = await element.textContent().catch(() => '');
-          const className = await element.getAttribute('class').catch(() => '');
-          const id = await element.getAttribute('id').catch(() => '');
-          const type = await element.getAttribute('type').catch(() => '');
-          const visible = await element.isVisible();
-          
-          logger.info(`Button ${i}:`, {
-            tag: tagName,
-            text: text?.trim(),
-            class: className,
-            id: id,
-            type: type,
-            visible: visible
-          });
-        } catch (e) {
-          logger.debug(`Error inspecting button ${i}: ${e.message}`);
-        }
-      }
-      
-      // Prova a cercare elementi che contengono "Continua" nel testo
-      try {
-        const continuaElements = await page.locator(':has-text("Continua"), :has-text("CONTINUA")').all();
-        logger.info(`Found ${continuaElements.length} elements containing "Continua" text`);
-        
-        for (let i = 0; i < continuaElements.length; i++) {
-          try {
-            const element = continuaElements[i];
-            const tagName = await element.evaluate(el => el.tagName);
-            const text = await element.textContent().catch(() => '');
-            const className = await element.getAttribute('class').catch(() => '');
-            const visible = await element.isVisible();
-            
-            logger.info(`Continua element ${i}:`, {
-              tag: tagName,
-              text: text?.trim(),
-              class: className,
-              visible: visible
-            });
-          } catch (e) {
-            logger.debug(`Error inspecting continua element ${i}: ${e.message}`);
-          }
-        }
-      } catch (e) {
-        logger.warn('Error searching for Continua elements:', e.message);
-      }
-      
-      throw new Error('Could not find or click continue button after detailed analysis');
-    }
-    
-    // Wait for navigation to payment page
-    logger.info('Waiting for navigation to payment page...');
-    await page.waitForTimeout(3000); // Wait for page transition
-    
-    // Take screenshot of payment page
-    await captureScreenshot(page, 'payment-page-loaded');
     
     return {
       success: true,
@@ -1148,36 +1033,230 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
       // Proviamo ad aspettare un po' di più per il caricamento
       await page.waitForTimeout(5000);
       await captureScreenshot(page, 'after-additional-wait');
+      
+      // Se non siamo ancora sulla pagina di pagamento, ritorna errore
+      logger.error('Not on payment page after waiting. Cannot proceed with booking completion.');
+      throw new Error('Not on payment page - please ensure personal data form was completed correctly');
     }
     
-// 3. IMPORTANTE: Selezionare il metodo di pagamento carta di credito
+    // 3. IMPORTANTE: Handle credit card payment process
     const paymentMethod = bookingData.paymentMethod || 'credit_card';
     
     if (paymentMethod === 'credit_card') {
       try {
-        const cardRadioButton = await page.locator('input#_r1c_').first();
-        const termsCheckbox = await page.locator('input#_r1j_').first();
+        // STEP 1: First select credit card payment method
+        logger.info('Selecting credit card payment method');
         
-        if (await cardRadioButton.isVisible({ timeout: 2000 })) {
-          const isChecked = await cardRadioButton.isChecked();
-          if (!isChecked) {
-            await cardRadioButton.check();
-            logger.info('Credit card option selected');
+        const cardRadioSelectors = [
+          'input#_r1c_', // ID specifico dal sito
+          'input[name="paymentMethodId"][value="104"]', // Credit card option value
+          'input[type="radio"][value="104"]', // Fallback by value  
+          'input[type="radio"][name="paymentMethodId"]' // Generic payment method radio
+        ];
+        
+        let cardRadioButton = null;
+        for (const selector of cardRadioSelectors) {
+          try {
+            cardRadioButton = await page.locator(selector).first();
+            if (await cardRadioButton.isVisible({ timeout: 2000 })) {
+              const isChecked = await cardRadioButton.isChecked();
+              if (!isChecked) {
+                await cardRadioButton.check();
+                logger.info(`Credit card option selected with selector: ${selector}`);
+              }
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        // STEP 2: Wait for credit card fields to appear after selection
+        logger.info('Waiting for credit card fields to appear...');
+        await page.waitForTimeout(2000); // Give time for fields to show
+        
+        // STEP 3: Fill card holder field
+        const cardHolderSelectors = [
+          'input#_r25_',  // ID specifico
+          'input[name="creditCard.holder"]',
+          'input[aria-labelledby="_r26_"]', // aria-labelledby
+          'input[placeholder*="Titolare"]',
+          'input[placeholder*="titolare"]'
+        ];
+        
+        let cardHolderFilled = false;
+        for (const selector of cardHolderSelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardHolder);
+              logger.info(`Card holder filled with selector: ${selector}`);
+              cardHolderFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!cardHolderFilled) {
+          logger.warn('Card holder field not found with any selector');
+          await captureScreenshot(page, 'card-holder-field-not-found');
+        }
+
+        // STEP 4: Fill card number field
+        const cardNumberSelectors = [
+          'input[name="creditCard.number"]',
+          'input[name="cardNumber"]',
+          'input[placeholder*="Numero carta"]',
+          'input[placeholder*="Card number"]',
+          'input[id*="cardNumber"]',
+          'input[maxlength="19"]', // Credit cards with spaces
+          'input[maxlength="16"]'  // Credit cards without spaces
+        ];
+        
+        let cardNumberFilled = false;
+        for (const selector of cardNumberSelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardNumber);
+              logger.info(`Card number filled with selector: ${selector}`);
+              cardNumberFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!cardNumberFilled) {
+          logger.warn('Card number field not found with any selector');
+          await captureScreenshot(page, 'card-number-field-not-found');
+        }
+
+        // STEP 5: Fill card expiry field
+        const expirySelectors = [
+          'input[name="creditCard.expiry"]',
+          'input[name="cardExpiry"]',
+          'input[placeholder*="MM/YY"]',
+          'input[placeholder*="Scadenza"]',
+          'input[id*="expiry"]',
+          'input[maxlength="5"]', // MM/YY format
+          'input[maxlength="7"]'  // MM/YYYY format
+        ];
+        
+        let expiryFilled = false;
+        for (const selector of expirySelectors) {
+          try {
+            const field = await page.locator(selector).first();
+            if (await field.isVisible({ timeout: 3000 })) {
+              await field.fill(bookingData.cardExpiry);
+              logger.info(`Card expiry filled with selector: ${selector}`);
+              expiryFilled = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!expiryFilled) {
+          logger.warn('Card expiry field not found with any selector');
+          await captureScreenshot(page, 'card-expiry-field-not-found');
+        }
+
+        // STEP 6: Fill CVV field (if provided)
+        if (bookingData.cvv) {
+          const cvvSelectors = [
+            'input[name="creditCard.cvv"]',
+            'input[name="cvv"]',
+            'input[placeholder*="CVV"]',
+            'input[placeholder*="CVC"]',
+            'input[id*="cvv"]',
+            'input[maxlength="3"]',
+            'input[maxlength="4"]'
+          ];
+          
+          let cvvFilled = false;
+          for (const selector of cvvSelectors) {
+            try {
+              const field = await page.locator(selector).first();
+              if (await field.isVisible({ timeout: 3000 })) {
+                await field.fill(bookingData.cvv);
+                logger.info(`CVV filled with selector: ${selector}`);
+                cvvFilled = true;
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          if (!cvvFilled) {
+            logger.warn('CVV field not found (might not be required)');
+          }
+        } else {
+          logger.info('CVV not provided');
+        }
+
+        // STEP 7: Accept terms and conditions
+        const termsCheckboxSelectors = [
+          'input#_r1v_',
+          'input[name="bookinkAndPrivacyPoliciesAcceptance"]',
+          'input[type="checkbox"]:has-text("condizioni")',
+          'input[type="checkbox"]:has-text("terms")',
+          'input[type="checkbox"]:has-text("privacy")'
+        ];
+
+        let termsCheckbox = null;
+        for (const selector of termsCheckboxSelectors) {
+          try {
+            termsCheckbox = await page.locator(selector).first();
+            if (await termsCheckbox.isVisible({ timeout: 2000 })) {
+              const isTermsChecked = await termsCheckbox.isChecked();
+              if (!isTermsChecked) {
+                await termsCheckbox.check();
+                logger.info(`Terms accepted with selector: ${selector}`);
+              }
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!termsCheckbox) {
+          logger.warn('Terms and privacy checkbox not found');
+        }
+
+        // Flexible selectors for the booking button
+        const bookButtonSelectors = [
+          'button.GuaranteeDataCollectionPage_CTA',
+          'button:has-text("Prenota")',
+          '.GuaranteeDataCollectionPage_CTA',
+          'button.CTA:has-text("Prenota")'
+        ];
+
+        let bookingClicked = false;
+        for (const selector of bookButtonSelectors) {
+          try {
+            const bookButton = await page.locator(selector).first();
+            if (await bookButton.isVisible({ timeout: 2000 }) && await bookButton.isEnabled()) {
+              await bookButton.click();
+              logger.info(`Booking confirmed with button: ${selector}`);
+              bookingClicked = true;
+              break;
+            }
+          } catch (e) {
+            continue;
           }
         }
 
-        if (await termsCheckbox.isVisible({ timeout: 2000 })) {
-          const isTermsChecked = await termsCheckbox.isChecked();
-          if (!isTermsChecked) {
-            await termsCheckbox.check();
-            logger.info('Terms and conditions accepted');
-          }
-        }
-
-        const bookButton = await page.locator('button.GuaranteeDataCollectionPage_CTA').first();
-        if (await bookButton.isVisible({ timeout: 2000 })) {
-          await bookButton.click();
-          logger.info('Booking confirmed with Prenota button');
+        if (!bookingClicked) {
+          logger.error('Could not find or click booking button');
+          await captureScreenshot(page, 'prenota-button-failed');
+          throw new Error('Could not find enabled booking button');
         }
       } catch (error) {
         logger.error('Failed during payment selection or confirmation:', error);
@@ -1224,10 +1303,19 @@ async function completeBookingWithRealSelectors(page, bookingData, testMode = fa
     
     logger.info('Proceeding with actual booking submission...');
     
-    // Try both possible booking buttons
+    // Try multiple possible booking buttons with more flexible selectors
     const bookingButtons = [
       BOOKING_COMPLETION_SELECTORS.finalBookingButton,
-      BOOKING_COMPLETION_SELECTORS.sidebarBookingButton
+      BOOKING_COMPLETION_SELECTORS.sidebarBookingButton,
+      'button:has-text("Prenota")', // Generic "Prenota" button
+      'button:has-text("Conferma prenotazione")', // "Confirm booking" button
+      'button:has-text("Completa prenotazione")', // "Complete booking" button
+      'button[type="submit"]', // Any submit button
+      '.CTA:has-text("Prenota")', // CTA button with "Prenota" text
+      'button.CTA', // Any CTA button
+      'form button:last-child', // Last button in form (usually submit)
+      'button:contains("Prenota")', // Alternative contains syntax
+      'input[type="submit"]' // Submit input
     ];
     
     let bookingSubmitted = false;

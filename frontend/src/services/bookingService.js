@@ -84,14 +84,22 @@ export const bookingService = {
    * Select a specific room
    * @param {string} sessionId - Session identifier
    * @param {string} roomId - Room identifier
+   * @param {string} optionId - Optional booking option identifier
    * @returns {Promise<Object>} Selection result
    */
-  async selectRoom(sessionId, roomId) {
+  async selectRoom(sessionId, roomId, optionId = null) {
     try {
-      const response = await api.post('/select-room', {
+      const requestData = {
         sessionId,
         roomId
-      })
+      }
+      
+      // Aggiungi optionId solo se specificato
+      if (optionId) {
+        requestData.optionId = optionId
+      }
+      
+      const response = await api.post('/select-room', requestData)
       
       return response
     } catch (error) {
@@ -142,8 +150,7 @@ export const bookingService = {
           paymentMethod: 'credit_card',
           cardNumber: bookingData.cardNumber?.replace(/\s/g, ''), // Remove spaces
           cardExpiry: bookingData.cardExpiry,
-          cvv: bookingData.cvv,
-          cardHolder: bookingData.cardHolder,
+          cardHolder: bookingData.cardHolder, // Campo titolare carta richiesto
           acceptNewsletter: bookingData.acceptNewsletter || false
         },
         testMode
@@ -180,8 +187,7 @@ export const bookingService = {
         phone: personalData.phone,
         cardNumber: personalData.cardNumber,
         cardExpiry: `${personalData.expiryMonth}/${personalData.expiryYear.slice(-2)}`, // Convert to MM/YY
-        cvv: personalData.cvv,
-        cardHolder: `${personalData.firstName} ${personalData.lastName}`,
+        cardHolder: personalData.cardHolder, // Usa il campo titolare carta dal form
         acceptNewsletter: personalData.acceptNewsletter || false
       }
       

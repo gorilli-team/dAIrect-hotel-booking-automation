@@ -57,92 +57,369 @@ async function extractRoomsWithSelectors(page) {
         const titleElement = roomCard.locator('.RoomCard h3, .ekc2wag9 h3, h3.Heading strong').first();
         const title = await titleElement.textContent().catch(() => `Camera ${i + 1}`);
         
-        // Estrai prezzo con selettori multipli basati sulla struttura SimpleBooking reale
-        const priceSelectors = [
-          // Selettori specifici SimpleBooking dal body fornito
-          '.Prices .mainAmount span', // Struttura esatta dal HTML: .Prices .mainAmount span
-          '.eiup2eu1 span', // Classe specifica SimpleBooking con span figlio
-          '.mainAmount span', // Versione più generica
-          '.eo2ouhh3 .mainAmount span', // Con classe container Prices
-          '.ltr-1yp4sq2 span', // Classe layout specifica
-          '.mainAmount', // Senza span specifico
-          '.eiup2eu1', // Classe diretta
-          '[class*="mainAmount"]', // Qualsiasi classe contenente mainAmount
-          '[class*="eiup2eu"]', // Qualsiasi classe SimpleBooking per prezzi
-          'div[type="PRICES"] .mainAmount span', // Attributo type=PRICES specifico
-          'div[type="PRICES"] span', // Solo con attributo type
-          '[translate="no"] span' // Elementi con translate="no" (prezzi)
-        ];
+        // Estrai blocco prezzo completo (con sconto, tasse, notti, etc.)
+        let priceBlock = null;
+        let price = '99'; // Fallback numerico per compatibilità
         
-        let priceText = '0';
-        let priceFound = false;
-        
-        for (const selector of priceSelectors) {
-          try {
-            const priceElement = roomCard.locator(selector).first();
-            const elementText = await priceElement.textContent({ timeout: 1000 });
-            if (elementText && elementText.match(/\d/)) {
-              priceText = elementText;
-              priceFound = true;
-              logger.info(`Price found with selector '${selector}': ${elementText}`);
-              break;
-            }
-          } catch (error) {
-            // Continua con il prossimo selettore
-          }
-        }
-        
-        if (!priceFound) {
-          // Fallback: cerca qualsiasi testo con € nella card
-          try {
-            const allText = await roomCard.textContent();
-            const euroMatch = allText.match(/\d+[,.]?\d*\s*€|€\s*\d+[,.]?\d*/g);
-            if (euroMatch && euroMatch.length > 0) {
-              priceText = euroMatch[0];
-              logger.info(`Price found with € fallback: ${priceText}`);
-            }
-          } catch (error) {
-            logger.warn('No price found anywhere in room card');
-          }
-        }
-        
-        // Pulizia del prezzo: gestisce formato SimpleBooking (€2.085,72)
-        let price = '99'; // default fallback
-        if (priceText) {
-          // Remove currency symbols and spaces
-          let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
+        try {
+          // Cerca il blocco prezzo completo con il selettore principale
+          const priceBlockSelectors = [
+            'div[type="PRICES"].Prices.eo2ouhh3', // Selettore completo dal HTML fornito
+            '.Prices.eo2ouhh3', // Senza l'attributo type
+            'div[type="PRICES"]', // Solo con attributo type
+            '.Prices' // Generico
+          ];
           
-          // Handle Italian number format: 2.085,72 (thousands separator . and decimal separator ,)
-          if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
-            // Format like 2.085,72 - remove thousands separator and use comma as decimal
-            cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
-          } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
-            // Format like 2085,72 - replace comma with dot
-            cleanedPrice = cleanedPrice.replace(',', '.');
+          for (const selector of priceBlockSelectors) {
+            try {
+              const priceElement = roomCard.locator(selector).first();
+              const priceHtml = await priceElement.innerHTML().catch(() => null);
+              
+              if (priceHtml) {
+                // Estrai anche il testo per informazioni separate
+                const priceText = await priceElement.textContent().catch(() => null);
+                
+                priceBlock = {
+                  html: priceHtml,
+                  text: priceText ? priceText.trim() : null
+                };
+                
+                // Estrai prezzo numerico per compatibilità con il resto del sistema
+                const mainAmountElement = priceElement.locator('.mainAmount span').first();
+                const mainAmountText = await mainAmountElement.textContent().catch(() => null);
+                
+                if (mainAmountText) {
+                  // Pulisci il prezzo per ottenere valore numerico
+                  let cleanedPrice = mainAmountText.replace(/[^0-9,.]/g, '');
+                  
+                  // Gestisce formato italiano: 2.479,68
+                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+                    cleanedPrice = cleanedPrice.replace(',', '.');
+                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
+                    const parts = cleanedPrice.split('.');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                      cleanedPrice = cleanedPrice;
+                    } else {
+                      cleanedPrice = cleanedPrice.replace(/\./g, '');
+                    }
+                  }
+                  
+                  const numericPrice = parseFloat(cleanedPrice);
+                  if (!isNaN(numericPrice) && numericPrice > 0) {
+                    price = Math.floor(numericPrice).toString();
+                  }
+                }
+                
+                logger.info(`Price block found with selector '${selector}': ${priceText}`);
+                break;
+              }
+            } catch (error) {
+              continue;
+            }
           }
-          // If only contains dots, assume it's thousands separator like 2.085
-          else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
-            const parts = cleanedPrice.split('.');
-            if (parts.length === 2 && parts[1].length <= 2) {
-              // Likely decimal: 2085.72
-              cleanedPrice = cleanedPrice;
+        } catch (error) {
+          logger.warn('Failed to extract price block:', error.message);
+        }
+        
+        // Se non troviamo il blocco completo, fallback al metodo precedente
+        if (!priceBlock) {
+          logger.info('Price block not found, falling back to simple price extraction');
+          
+          const priceSelectors = [
+            '.Prices .mainAmount span',
+            '.eiup2eu1 span',
+            '.mainAmount span',
+            '.mainAmount',
+            '[class*="mainAmount"]'
+          ];
+          
+          let priceText = '0';
+          let priceFound = false;
+          
+          for (const selector of priceSelectors) {
+            try {
+              const priceElement = roomCard.locator(selector).first();
+              const elementText = await priceElement.textContent({ timeout: 1000 });
+              if (elementText && elementText.match(/\d/)) {
+                priceText = elementText;
+                priceFound = true;
+                logger.info(`Fallback price found with selector '${selector}': ${elementText}`);
+                break;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+          
+          if (priceFound) {
+            let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
+            if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+              cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+            } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+              cleanedPrice = cleanedPrice.replace(',', '.');
+            }
+            
+            const numericPrice = parseFloat(cleanedPrice);
+            if (!isNaN(numericPrice) && numericPrice > 0) {
+              price = Math.floor(numericPrice).toString();
+            }
+          }
+        }
+        
+        // Estrai descrizione dal selettore specifico (solo quello corretto)
+        let description = 'Camera disponibile';
+        try {
+          const descElement = roomCard.locator('.ekc2wag7 .ekc2wag6').first();
+          const rawDescription = await descElement.textContent().catch(() => null);
+          
+          if (rawDescription && rawDescription.trim()) {
+            // Pulisci la descrizione da elementi indesiderati
+            description = rawDescription.trim()
+              .replace(/^Slide \d+ di \d+.*?ruler/g, '') // Rimuovi "Slide 1 di 8...ruler"
+              .replace(/^\d+ m².*?ruler/g, '') // Rimuovi "28 m²...ruler"
+              .replace(/chevron-left.*?chevron-right/g, '') // Rimuovi navigazione
+              .replace(/^\d+ \/ \d+/g, '') // Rimuovi "1 / 8"
+              .replace(/ruler\d+\s*m²/g, '') // Rimuovi "ruler45 m²"
+              .replace(/Max ospiti:.*?crib\d+/g, '') // Rimuovi info ospiti
+              .replace(/adult\d+/g, '') // Rimuovi "adult5"
+              .replace(/crib\d+/g, '') // Rimuovi "crib1"
+              .replace(/snow|volume|terrace|tree|help-circle|building|wifi/g, '') // Rimuovi icone
+              .replace(/Aria condizionata|Insonorizzazione|Balcone|Vista|Vista luogo di interesse|Vista città|Wi-Fi Free/g, '') // Rimuovi features
+              .replace(/Vedi di più/g, '') // Rimuovi "Vedi di più"
+              .replace(/Ne resta solo \d+|Ne restano solo \d+/g, '') // Rimuovi disponibilità
+              .replace(/A partire da.*?Info e prenota/g, '') // Rimuovi prezzo e bottone
+              .replace(/chevron-up.*?Offerta speciale/g, '') // Rimuovi offerta speciale
+              .replace(/tag/g, '') // Rimuovi "tag"
+              .replace(/\s+/g, ' ') // Normalizza spazi
+              .trim();
+              
+            if (description.length > 10) { // Solo se abbiamo una descrizione valida
+              logger.info(`Clean description extracted: ${description}`);
             } else {
-              // Likely thousands: 2.085
-              cleanedPrice = cleanedPrice.replace(/\./g, '');
+              description = 'Camera disponibile';
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to extract description:', error.message);
+        }
+        
+        // Estrai blocco completo dimensioni + ospiti dal selettore .ekc2wag8
+        let roomInfoBlock = null;
+        try {
+          const infoBlockElement = roomCard.locator('.ekc2wag8.ltr-1f91znd.e3a2zab1').first();
+          const infoBlockHtml = await infoBlockElement.innerHTML().catch(() => null);
+          
+          if (infoBlockHtml) {
+            // Estrai anche il testo leggibile per informazioni separate
+            const infoBlockText = await infoBlockElement.textContent().catch(() => null);
+            
+            roomInfoBlock = {
+              html: infoBlockHtml,
+              text: infoBlockText ? infoBlockText.trim() : null
+            };
+            
+            logger.info(`Found room info block: ${infoBlockText}`);
+          }
+        } catch (error) {
+          logger.warn('Failed to extract room info block:', error.message);
+        }
+        
+        // Estrai caratteristiche dettagliate della camera (escludi dimensioni)
+        const detailedFeatures = [];
+        try {
+          // Trova tutti gli elementi RoomFeature nella sezione caratteristiche
+          const featureElements = roomCard.locator('.RoomFeature .ltr-zswzrr');
+          const featureCount = await featureElements.count();
+          
+          for (let featIdx = 0; featIdx < featureCount; featIdx++) {
+            const featureEl = featureElements.nth(featIdx);
+            const featureText = await featureEl.textContent().catch(() => null);
+            
+            if (featureText && featureText.trim()) {
+              const cleanFeatureText = featureText.trim();
+              
+              // Escludi le dimensioni dalle features (già estratte in roomSize)
+              if (!cleanFeatureText.match(/^\d+\s*m²$/)) {
+                detailedFeatures.push(cleanFeatureText);
+              }
             }
           }
           
-          const numericPrice = parseFloat(cleanedPrice);
-          if (!isNaN(numericPrice) && numericPrice > 0) {
-            price = Math.floor(numericPrice).toString(); // Remove decimals for consistency
-          }
+          logger.info(`Found ${detailedFeatures.length} detailed features (excluding room size):`, detailedFeatures);
+        } catch (error) {
+          logger.warn('Failed to extract detailed features:', error.message);
         }
         
-        // Estrai descrizione
-        const descElement = roomCard.locator('.ekc2wag6, .RoomCard .Paragraph').first();
-        const description = await descElement.textContent().catch(() => 'Camera disponibile');
+        // Estrai disponibilità limitata con più dettagli
+        let availabilityInfo = null;
+        try {
+          const availElement = roomCard.locator('.enongdq2, .enongdq1, .enongdq0');
+          
+          // Prova a ottenere il numero rimasto
+          const numberElement = roomCard.locator('.enongdq1');
+          const numberText = await numberElement.textContent().catch(() => null);
+          
+          // Prova a ottenere il testo descrittivo
+          const descElement = roomCard.locator('.enongdq0');
+          const descText = await descElement.textContent().catch(() => null);
+          
+          if (numberText || descText) {
+            availabilityInfo = {
+              remaining: numberText ? parseInt(numberText) : null,
+              description: descText || null,
+              isLimited: true
+            };
+            logger.info(`Found availability info:`, availabilityInfo);
+          }
+        } catch (error) {
+          // Info disponibilità non trovate
+        }
         
-        // Trova bottone di prenotazione
+        // Estrai opzioni di prenotazione dal collapse (se espanso)
+        const bookingOptions = [];
+        try {
+          // Cerca il collapse delle opzioni
+          const collapseContainer = roomCard.locator('.roomOptionsCollapse, .ltr-dmxz30');
+          const hasCollapse = await collapseContainer.count() > 0;
+          
+          if (hasCollapse) {
+            logger.info(`Found booking options collapse for room ${i + 1}`);
+            
+            // Estrai tutte le sezioni RateWithOptions
+            const rateOptions = collapseContainer.locator('.RateWithOptions, .e1sl87534');
+            const rateOptionsCount = await rateOptions.count();
+            
+            logger.info(`Found ${rateOptionsCount} rate options in collapse`);
+            
+            for (let rateIdx = 0; rateIdx < rateOptionsCount; rateIdx++) {
+              const rateOption = rateOptions.nth(rateIdx);
+              
+              try {
+                // Estrai nome/titolo della tariffa
+                const rateTitleElement = rateOption.locator('h4.e18qkw5q3 strong, h4 strong').first();
+                const rateTitle = await rateTitleElement.textContent().catch(() => `Tariffa ${rateIdx + 1}`);
+                
+                // Estrai descrizione della tariffa
+                const rateDescElement = rateOption.locator('p.e18qkw5q2, .Paragraph').first();
+                const rateDescription = await rateDescElement.textContent().catch(() => null);
+                
+                // Estrai prezzo della tariffa
+                let ratePrice = '0';
+                const ratePriceElement = rateOption.locator('.mainAmount span, .eiup2eu2 span').first();
+                const ratePriceText = await ratePriceElement.textContent().catch(() => null);
+                
+                if (ratePriceText) {
+                  let cleanedPrice = ratePriceText.replace(/[^0-9,.]/g, '');
+                  // Gestisce formato italiano: 1.701 o 1.956,15
+                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
+                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
+                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
+                    cleanedPrice = cleanedPrice.replace(',', '.');
+                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
+                    const parts = cleanedPrice.split('.');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                      // È un decimale: 123.45
+                      cleanedPrice = cleanedPrice;
+                    } else {
+                      // È un separatore delle migliaia: 1.701
+                      cleanedPrice = cleanedPrice.replace(/\./g, '');
+                    }
+                  }
+                  
+                  const numericPrice = parseFloat(cleanedPrice);
+                  if (!isNaN(numericPrice) && numericPrice > 0) {
+                    ratePrice = numericPrice.toString();
+                  }
+                }
+                
+                // Estrai info sconto se presente
+                let discountInfo = null;
+                const discountElement = rateOption.locator('.discount, .e1f8iu742').first();
+                const discountCount = await discountElement.count();
+                
+                if (discountCount > 0) {
+                  const discountPercent = await discountElement.locator('.percent, .ltr-dsm5ai').textContent().catch(() => null);
+                  const originalPrice = await discountElement.locator('.originalAmount, .ltr-4pyi7h').textContent().catch(() => null);
+                  
+                  if (discountPercent || originalPrice) {
+                    discountInfo = {
+                      percent: discountPercent?.trim(),
+                      originalPrice: originalPrice?.trim()
+                    };
+                  }
+                }
+                
+                // Estrai politica di cancellazione
+                let cancellationPolicy = null;
+                const cancelPolicyElement = rateOption.locator('.Rate__CancellationPolicy, .e18qkw5q0').first();
+                const cancelPolicyText = await cancelPolicyElement.textContent().catch(() => null);
+                
+                if (cancelPolicyText) {
+                  const isRefundable = !cancelPolicyText.toLowerCase().includes('non rimborsabile');
+                  cancellationPolicy = {
+                    text: cancelPolicyText.trim(),
+                    refundable: isRefundable
+                  };
+                }
+                
+                // Estrai tipo di pasto (Camera e Colazione, etc.)
+                let mealPlan = null;
+                const mealPlanElement = rateOption.locator('.e16r10jm5, p b').first();
+                const mealPlanText = await mealPlanElement.textContent().catch(() => null);
+                
+                if (mealPlanText) {
+                  mealPlan = mealPlanText.trim();
+                }
+                
+                // Trova bottone "Prenota" per questa opzione
+                const bookButtonElement = rateOption.locator('.RoomOption_CTA, .e16r10jm0, button:has-text("Prenota")').first();
+                const hasBookButton = await bookButtonElement.count() > 0;
+                
+                let bookSelector = null;
+                if (hasBookButton) {
+                  // Genera selector specifico per questa opzione
+                  bookSelector = `.RoomResultBlock:nth-child(${i + 1}) .RateWithOptions:nth-child(${rateIdx + 1}) .RoomOption_CTA`;
+                }
+                
+                // Estrai badge "Offerta speciale" se presente
+                let specialOffer = false;
+                const specialOfferElement = rateOption.locator('.Badge:has-text("Offerta speciale"), .e1jssjhy1').first();
+                const hasSpecialOffer = await specialOfferElement.count() > 0;
+                if (hasSpecialOffer) {
+                  specialOffer = true;
+                }
+                
+                const bookingOption = {
+                  id: `rate-${i + 1}-${rateIdx + 1}`,
+                  name: rateTitle.trim(),
+                  description: rateDescription ? rateDescription.trim().substring(0, 500) : null,
+                  price: parseFloat(ratePrice),
+                  currency: 'EUR',
+                  mealPlan: mealPlan,
+                  cancellationPolicy: cancellationPolicy,
+                  discountInfo: discountInfo,
+                  specialOffer: specialOffer,
+                  bookSelector: bookSelector,
+                  available: hasBookButton
+                };
+                
+                bookingOptions.push(bookingOption);
+                logger.info(`Extracted booking option: ${bookingOption.name} - €${bookingOption.price}`);
+                
+              } catch (error) {
+                logger.warn(`Failed to extract rate option ${rateIdx + 1} for room ${i + 1}:`, error.message);
+              }
+            }
+          } else {
+            logger.info(`No booking options collapse found for room ${i + 1}`);
+          }
+        } catch (error) {
+          logger.warn(`Failed to extract booking options for room ${i + 1}:`, error.message);
+        }
+        
+        // Trova bottone di prenotazione principale
         const bookButtons = roomCard.locator('.RoomCard_CTA, .ekc2wag2, button:has-text("Info e prenota"), button:has-text("Prenota")');
         const bookButtonCount = await bookButtons.count();
         
@@ -150,6 +427,76 @@ async function extractRoomsWithSelectors(page) {
         if (bookButtonCount > 0) {
           // Genera un selector unico per questo bottone
           mainBookSelector = `.RoomCard:nth-child(${i + 1}) .RoomCard_CTA, .RoomResultBlock:nth-child(${i + 1}) button`;
+        }
+        
+        // Estrai immagini dal carousel
+        const images = [];
+        try {
+          // Selettori per le immagini nel carousel SpringImageCarousel
+          const imageSelectors = [
+            '.SpringImageCarousel img[src]',
+            '.e1sp74u31[src]', // Classe specifica delle immagini
+            '.SpringImageCarousel__Slide img[src]',
+            '.e1sp74u35[style*="background-image"]', // Background images
+            '[class*="SpringImageCarousel"] img[src]'
+          ];
+          
+          for (const selector of imageSelectors) {
+            try {
+              const imageElements = roomCard.locator(selector);
+              const imageCount = await imageElements.count();
+              
+              for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+                const imgElement = imageElements.nth(imgIdx);
+                
+                // Prova a ottenere l'URL dalla src
+                let imageUrl = await imgElement.getAttribute('src').catch(() => null);
+                
+                // Se non c'è src, prova con background-image
+                if (!imageUrl) {
+                  const style = await imgElement.getAttribute('style').catch(() => null);
+                  if (style && style.includes('background-image')) {
+                    const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
+                    if (urlMatch) {
+                      imageUrl = urlMatch[1];
+                    }
+                  }
+                }
+                
+                // Aggiungi immagine se valida e non duplicata
+                if (imageUrl && imageUrl.startsWith('http') && !images.includes(imageUrl)) {
+                  images.push(imageUrl);
+                  logger.info(`Found room image: ${imageUrl}`);
+                }
+              }
+              
+              if (images.length > 0) break; // Se abbiamo trovato immagini, non continuare con altri selettori
+            } catch (error) {
+              // Continua con il prossimo selettore
+            }
+          }
+          
+          // Fallback: cerca anche nei div con background-image
+          if (images.length === 0) {
+            const bgElements = roomCard.locator('[style*="background-image"]');
+            const bgCount = await bgElements.count();
+            
+            for (let bgIdx = 0; bgIdx < bgCount; bgIdx++) {
+              const bgElement = bgElements.nth(bgIdx);
+              const style = await bgElement.getAttribute('style').catch(() => null);
+              
+              if (style && style.includes('background-image')) {
+                const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
+                if (urlMatch && urlMatch[1].startsWith('http') && !images.includes(urlMatch[1])) {
+                  images.push(urlMatch[1]);
+                  logger.info(`Found room background image: ${urlMatch[1]}`);
+                }
+              }
+            }
+          }
+          
+        } catch (error) {
+          logger.warn(`Failed to extract images for room ${i + 1}:`, error.message);
         }
         
         // Verifica disponibilità limitata
@@ -161,11 +508,16 @@ async function extractRoomsWithSelectors(page) {
           name: title.trim(),
           price: parseInt(price) || 99,
           currency: 'EUR',
-          description: description.trim().substring(0, 100),
-          features: ['WiFi gratuito', 'Aria condizionata'],
+          description: description.trim().substring(0, 200), // Increased length for longer descriptions
+          features: detailedFeatures.length > 0 ? detailedFeatures : ['WiFi gratuito', 'Aria condizionata'], // Use extracted features
+          roomInfoBlock: roomInfoBlock, // Blocco HTML completo con dimensioni + ospiti
+          priceBlock: priceBlock, // Blocco HTML completo del prezzo (con sconto, tasse, notti, etc.)
           mainBookSelector,
           available: true,
-          limitedAvailability: limitedAvailText
+          limitedAvailability: limitedAvailText,
+          availabilityInfo: availabilityInfo, // Detailed availability info
+          images: images, // Array di URL delle immagini
+          bookingOptions: bookingOptions // Opzioni di prenotazione estratte dal collapse
         };
         
         // Check for duplicates before adding (simple deduplication by name)
@@ -262,9 +614,41 @@ router.post('/start-search', async (req, res) => {
       children
     });
 
-    // Initialize Playwright session
-    const browser = await playwrightService.initBrowser();
-    const page = await playwrightService.createPage(browser);
+    // Initialize Playwright session with new browser instance
+    let browser = null;
+    let page = null;
+    
+    try {
+      browser = await playwrightService.initBrowser();
+      page = await playwrightService.createPage(browser);
+    } catch (browserError) {
+      logger.error('Failed to initialize browser:', browserError);
+      return res.status(500).json({
+        error: 'Browser initialization failed',
+        message: 'Could not start browser session. Please try again.'
+      });
+    }
+
+    // Validate browser and page before storing session
+    if (!browser || !page) {
+      logger.error('Browser or page is null after initialization');
+      return res.status(500).json({
+        error: 'Browser session invalid',
+        message: 'Failed to create valid browser session'
+      });
+    }
+    
+    // Test browser connectivity
+    try {
+      await page.goto('about:blank', { timeout: 5000 });
+    } catch (connectError) {
+      logger.error('Browser connectivity test failed:', connectError);
+      await playwrightService.cleanup(browser);
+      return res.status(500).json({
+        error: 'Browser connectivity failed',
+        message: 'Could not establish browser connection'
+      });
+    }
 
     // Store session data
     sessions.set(sessionId, {
@@ -273,18 +657,46 @@ router.post('/start-search', async (req, res) => {
       page,
       searchParams: { checkinDate, checkoutDate, adults, children },
       currentStep: 'search',
-      createdAt: new Date()
+      createdAt: new Date(),
+      lastActivity: new Date()
     });
 
     // Costruisce URL diretto con parametri di ricerca
     const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children });
     logger.info('Using direct URL for search', { directUrl });
 
-    // Navigate directly to search results page
-    await page.goto(directUrl, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 15000
-    });
+    // Navigate directly to search results page with retry logic
+    let navigationSuccess = false;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        logger.info(`Navigation attempt ${attempt}/3 to: ${directUrl}`);
+        
+        await page.goto(directUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 30000 // Increased timeout to 30 seconds
+        });
+        
+        navigationSuccess = true;
+        logger.info(`Navigation successful on attempt ${attempt}`);
+        break;
+        
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Navigation attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < 3) {
+          logger.info(`Waiting 2 seconds before retry...`);
+          await page.waitForTimeout(2000);
+        }
+      }
+    }
+    
+    if (!navigationSuccess) {
+      logger.error('All navigation attempts failed:', lastError?.message);
+      throw new Error(`Failed to navigate to search page after 3 attempts: ${lastError?.message}`);
+    }
     
     // Handle cookie consent if present
     await aiService.handleCookieConsent(page);
@@ -354,6 +766,30 @@ router.get('/available-rooms/:sessionId', async (req, res) => {
       });
     }
 
+    // Validate session browser and page
+    if (!session.browser || !session.page) {
+      logger.error(`Session ${sessionId} has invalid browser or page`);
+      sessions.delete(sessionId);
+      return res.status(400).json({
+        error: 'Invalid session state',
+        message: 'Browser session is no longer valid. Please start a new search.'
+      });
+    }
+
+    // Test if browser is still connected
+    try {
+      await session.page.url();
+      session.lastActivity = new Date();
+    } catch (browserError) {
+      logger.error(`Browser disconnected for session ${sessionId}:`, browserError);
+      await playwrightService.cleanup(session.browser).catch(() => {});
+      sessions.delete(sessionId);
+      return res.status(400).json({
+        error: 'Browser session expired',
+        message: 'Your browser session has expired. Please start a new search.'
+      });
+    }
+
     logger.info(`Getting available rooms for session ${sessionId}`);
 
     // Extract rooms using direct selectors (no AI)
@@ -389,7 +825,7 @@ router.get('/available-rooms/:sessionId', async (req, res) => {
 // POST /api/booking/select-room
 router.post('/select-room', async (req, res) => {
   try {
-    const { sessionId, roomId } = req.body;
+    const { sessionId, roomId, optionId } = req.body;
 
     if (!sessionId || !roomId) {
       return res.status(400).json({
@@ -422,15 +858,13 @@ router.post('/select-room', async (req, res) => {
       selector: selectedRoom.mainBookSelector
     });
 
-    // Use direct selectors to click the "Info e prenota" or "Prenota" button
+    // Use direct selectors to click the "Info e prenota" button (first step)
     const selectors = [
       selectedRoom.mainBookSelector, // Specific selector for this room
       `button:nth-child(${roomId.split('-')[1]}) >> text="Info e prenota"`, // Fallback with room index
-      `button:nth-child(${roomId.split('-')[1]}) >> text="Prenota"`, // Fallback with "Prenota"
       '.RoomCard_CTA', // Generic room booking button
       '.ekc2wag2', // SimpleBooking specific class
       'button:has-text("Info e prenota")', // Generic text search
-      'button:has-text("Prenota")', // Generic "Prenota" search
     ];
 
     let clicked = false;
@@ -440,7 +874,7 @@ router.post('/select-room', async (req, res) => {
       if (!selector) continue;
       
       try {
-        logger.info(`Trying to click room selection with selector: ${selector}`);
+        logger.info(`Trying to click "Info e prenota" with selector: ${selector}`);
         
         // Wait for selector and try to click
         const element = await session.page.waitForSelector(selector, { timeout: 3000 });
@@ -448,7 +882,7 @@ router.post('/select-room', async (req, res) => {
           await element.click();
           clicked = true;
           usedSelector = selector;
-          logger.info(`Successfully clicked room selection button with selector: ${selector}`);
+          logger.info(`Successfully clicked "Info e prenota" button with selector: ${selector}`);
           break;
         }
       } catch (error) {
@@ -457,36 +891,175 @@ router.post('/select-room', async (req, res) => {
     }
 
     if (!clicked) {
-      logger.error('Failed to click any room selection button');
+      logger.error('Failed to click any "Info e prenota" button');
       return res.status(500).json({
         error: 'Failed to select room',
-        message: 'Could not find or click room selection button'
+        message: 'Could not find or click "Info e prenota" button'
       });
+    }
+
+    // Wait for the booking options page to load
+    logger.info('Waiting for booking options page to load...');
+    await session.page.waitForTimeout(3000);
+    
+    // Check if we're on the booking options page with rate selections
+    const bookingOptionsVisible = await session.page.isVisible('.RateWithOptions, .e1sl87534', { timeout: 5000 }).catch(() => false);
+    
+    if (bookingOptionsVisible) {
+      logger.info('✅ Booking options page loaded - found rate options');
+      
+      let rateOptionClicked = false;
+      
+      // Se l'utente ha specificato un'opzione, cerca di usare il selettore specifico
+      if (optionId && selectedRoom.bookingOptions) {
+        const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
+        
+        if (selectedOption && selectedOption.bookSelector) {
+          logger.info(`Trying to click specific option "${selectedOption.name}" with selector: ${selectedOption.bookSelector}`);
+          
+          try {
+            const specificButton = await session.page.waitForSelector(selectedOption.bookSelector, { timeout: 3000 });
+            if (specificButton) {
+              await specificButton.click();
+              rateOptionClicked = true;
+              logger.info(`Successfully clicked specific option "${selectedOption.name}"`);
+            }
+          } catch (error) {
+            logger.warn(`Specific option selector failed: ${error.message}`);
+          }
+        } else {
+          logger.warn(`Option ${optionId} not found in room booking options or missing selector`);
+        }
+      }
+      
+      // Se non è stato possibile cliccare l'opzione specifica, usa il primo bottone disponibile
+      if (!rateOptionClicked) {
+        logger.info('Falling back to first available "Prenota" button');
+        
+        // Get current URL before clicking to detect navigation
+        const currentUrl = session.page.url();
+        
+        const rateOptionSelectors = [
+          '.RoomOption_CTA.e16r10jm0', // Primary selector for rate option buttons
+          'button.RoomOption_CTA', // Generic rate option button
+          '.RateWithOptions button:has-text("Prenota")', // Prenota button within rate options
+          'button:has-text("Prenota")', // Any Prenota button
+        ];
+        
+        for (const rateSelector of rateOptionSelectors) {
+          try {
+            logger.info(`Trying to click rate option "Prenota" with selector: ${rateSelector}`);
+            
+            const rateButton = await session.page.waitForSelector(rateSelector, { timeout: 30000 });
+            if (rateButton) {
+              // Wait for element to be fully interactive
+              await session.page.waitForTimeout(1000);
+              
+              // Ensure element is visible and enabled
+              const isVisible = await rateButton.isVisible();
+              const isEnabled = await rateButton.isEnabled();
+              
+              if (isVisible && isEnabled) {
+                // Scroll to element to ensure it's in view
+                await rateButton.scrollIntoViewIfNeeded();
+                await session.page.waitForTimeout(500);
+                
+                // Click with force to ensure it registers
+                await rateButton.click({ force: true });
+                
+                // Wait a moment to see if navigation happens
+                await session.page.waitForTimeout(2000);
+                
+                // Check if URL changed (indicates successful navigation)
+                const newUrl = session.page.url();
+                if (newUrl !== currentUrl) {
+                  rateOptionClicked = true;
+                  logger.info(`Successfully clicked rate option "Prenota" with selector: ${rateSelector}`);
+                  break;
+                } else {
+                  logger.warn(`Button clicked but no navigation detected with selector: ${rateSelector}`);
+                }
+              } else {
+                logger.warn(`Button found but not clickable: visible=${isVisible}, enabled=${isEnabled}`);
+              }
+            }
+          } catch (error) {
+            logger.debug(`Rate selector ${rateSelector} failed: ${error.message}`);
+          }
+        }
+      }
+      
+      if (!rateOptionClicked) {
+        logger.error('Failed to click any rate option "Prenota" button');
+        return res.status(500).json({
+          error: 'Failed to select rate option',
+          message: 'Could not find or click rate option "Prenota" button'
+        });
+      }
+    } else {
+      logger.warn('❌ Booking options page not detected - proceeding anyway');
     }
 
     // Wait for navigation to customer data page
     logger.info('Waiting for navigation to customer data page...');
-    try {
-      await session.page.waitForNavigation({ 
-        waitUntil: 'domcontentloaded', 
-        timeout: 10000 
-      });
-      logger.info('Successfully navigated to customer data page');
-    } catch (error) {
-      logger.warn('Navigation timeout, checking current page content');
-    }
-
-    // Wait for customer data form to load
-    await session.page.waitForTimeout(2000);
+    
+    await session.page.waitForTimeout(5000); // Give more time for navigation
+    
+    // DEBUG: Get current page state
+    const finalUrl = session.page.url();
+    const pageTitle = await session.page.title();
+    logger.info('After clicking Prenota button:', {
+      url: finalUrl,
+      title: pageTitle
+    });
     
     // Check if we're on customer data page by looking for form elements
     const isCustomerDataPage = await session.page.isVisible(
-      'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")', 
-      { timeout: 5000 }
+      'input[name="name"], input[name="firstName"], h2:has-text("Completa i tuoi dati")' 
     ).catch(() => false);
 
     if (!isCustomerDataPage) {
       logger.warn('Not on customer data page yet, taking screenshot for debugging');
+      
+      // DEBUG: Check for any forms or input fields on current page
+      const allInputs = await session.page.locator('input').all();
+      const inputInfo = [];
+      
+      for (let i = 0; i < Math.min(allInputs.length, 10); i++) {
+        try {
+          const input = allInputs[i];
+          const type = await input.getAttribute('type');
+          const name = await input.getAttribute('name');
+          const id = await input.getAttribute('id');
+          const placeholder = await input.getAttribute('placeholder');
+          const visible = await input.isVisible();
+          
+          inputInfo.push({ index: i, type, name, id, placeholder, visible });
+        } catch (e) {
+          // Skip this input
+        }
+      }
+      
+      logger.info('DEBUG - Current page inputs:', inputInfo);
+      
+      // Check for potential next steps or buttons
+      const allButtons = await session.page.locator('button, input[type="button"], input[type="submit"]').all();
+      const buttonInfo = [];
+      
+      for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+        try {
+          const button = allButtons[i];
+          const text = await button.textContent();
+          const className = await button.getAttribute('class');
+          const visible = await button.isVisible();
+          
+          buttonInfo.push({ index: i, text: text?.trim(), class: className, visible });
+        } catch (e) {
+          // Skip this button
+        }
+      }
+      
+      logger.info('DEBUG - Current page buttons:', buttonInfo);
     }
 
     // Take screenshot for debugging
@@ -566,20 +1139,142 @@ router.post('/fill-personal-data', async (req, res) => {
       firstName: personalData.firstName
     });
 
-    // Call the new fillPersonalDataPage function
+    // Fill personal data on the page
     const fillResult = await playwrightService.fillPersonalDataPage(
       session.page,
       personalData
     );
 
     if (fillResult.success) {
-      // Update session to payment step
+      // Click the "Continua" button after filling personal data
+      logger.info('Clicking Continua button to proceed to payment page');
+      
+      try {
+        // First, ensure privacy policy is accepted if not already
+        logger.info('Ensuring privacy policy is accepted before clicking Continue');
+        const privacySelectors = [
+          'input[name="privacyPolicyAcceptance"]',
+          'input[name="privacy"]',
+          'input[type="checkbox"]' // Generic fallback
+        ];
+        
+        for (const privacySelector of privacySelectors) {
+          try {
+            const privacyCheckbox = await session.page.waitForSelector(privacySelector, { timeout: 2000 });
+            if (privacyCheckbox) {
+              const isChecked = await privacyCheckbox.isChecked();
+              if (!isChecked) {
+                await privacyCheckbox.check();
+                logger.info(`Privacy policy accepted with selector: ${privacySelector}`);
+                await session.page.waitForTimeout(1000); // Give time for UI to update
+              }
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        // Try multiple selectors for the Continue button
+        const continueSelectors = [
+          'button.CustomerDataCollectionPage_CTA',
+          '.CustomerDataCollectionPage_CTA',
+          'button.CustomerDataCollectionPage_CTA.CTA',
+          'button:has-text("Continua")',
+          'button[type="submit"]',
+          '.CTA:has-text("Continua")',
+          'button.CTA'
+        ];
+        
+        let continueClicked = false;
+        let usedSelector = null;
+        
+        for (const selector of continueSelectors) {
+          try {
+            logger.info(`Trying Continue button selector: ${selector}`);
+            
+            // Wait for selector with shorter timeout to try multiple selectors quickly
+            const button = await session.page.waitForSelector(selector, { timeout: 3000 });
+            if (button) {
+              const isVisible = await button.isVisible();
+              const isEnabled = await button.isEnabled();
+              
+              logger.info(`Continue button found: visible=${isVisible}, enabled=${isEnabled}`);
+              
+              if (isVisible && isEnabled) {
+                await button.click();
+                continueClicked = true;
+                usedSelector = selector;
+                logger.info(`Successfully clicked Continue button with selector: ${selector}`);
+                break;
+              } else {
+                logger.warn(`Continue button found but not clickable: visible=${isVisible}, enabled=${isEnabled}`);
+              }
+            }
+          } catch (e) {
+            logger.debug(`Continue selector ${selector} failed: ${e.message}`);
+            continue;
+          }
+        }
+        
+        if (!continueClicked) {
+          // Take screenshot for debugging before throwing error
+          await session.page.screenshot({ 
+            path: `backend/logs/continue-button-not-found-${sessionId}.png`,
+            fullPage: true
+          });
+          
+          throw new Error('Could not find or click Continue button with any selector');
+        }
+        
+        // Wait for navigation to payment page
+        logger.info('Waiting for navigation to payment page...');
+        await session.page.waitForTimeout(5000); // Give time for page to load
+        
+        // Take screenshot to verify we're on the payment page
+        await session.page.screenshot({ 
+          path: `backend/logs/after-continua-click-${sessionId}.png`,
+          fullPage: true
+        });
+        
+        // Verify we're on the payment page by checking for payment elements
+        const isOnPaymentPage = await session.page.evaluate(() => {
+          const paymentIndicators = [
+            'input[name="mobilePhone"]',
+            '.PaymentMethodsForm',
+            'h2:contains("Scegli come garantire")',
+            '.GuaranteeDataCollectionPage'
+          ];
+          
+          return paymentIndicators.some(selector => {
+            try {
+              return document.querySelector(selector) !== null;
+            } catch (e) {
+              return false;
+            }
+          });
+        });
+        
+        if (isOnPaymentPage) {
+          logger.info('Successfully navigated to payment page');
+        } else {
+          logger.warn('May not be on payment page yet, but continuing...');
+        }
+        
+        logger.info(`Continue button clicked successfully using selector: ${usedSelector}`);
+        
+      } catch (error) {
+        logger.error('Error clicking Continua button:', error);
+        throw new Error(`Failed to click Continua button: ${error.message}`);
+      }
+
+      // Update session - move to payment step
       session.currentStep = 'payment';
       session.personalDataFilled = true;
       session.personalData = personalData;
       session.updatedAt = new Date();
       
-      logger.info('Personal data filled successfully, moved to payment step', {
+      logger.info('Personal data filled successfully and "Continua" button clicked', {
         sessionId,
         email: personalData.email
       });
@@ -587,9 +1282,9 @@ router.post('/fill-personal-data', async (req, res) => {
       res.json({
         success: true,
         sessionId,
-        message: 'Personal data filled and navigated to payment page',
+        message: 'Personal data filled and "Continua" clicked',
         currentStep: 'payment',
-        nextAction: 'Call /complete-booking to finalize the booking'
+        nextAction: 'Prepare for payment data input'
       });
     } else {
       logger.error('Failed to fill personal data', {
@@ -729,8 +1424,7 @@ router.post('/complete-booking', async (req, res) => {
       paymentMethod: Joi.string().valid('credit_card', 'bank_transfer').default('credit_card'),
       cardNumber: Joi.string().optional(),
       cardExpiry: Joi.string().optional(), // MM/YY format
-      cvv: Joi.string().optional(),
-      cardHolder: Joi.string().optional(),
+      cardHolder: Joi.string().required(), // Campo titolare carta richiesto
       acceptNewsletter: Joi.boolean().default(false)
     }).required(),
     testMode: Joi.boolean().default(false) // IMPORTANT: prevents actual payment
