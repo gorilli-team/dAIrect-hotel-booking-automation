@@ -936,6 +936,9 @@ router.post('/select-room', async (req, res) => {
       if (!rateOptionClicked) {
         logger.info('Falling back to first available "Prenota" button');
         
+        // Get current URL before clicking to detect navigation
+        const currentUrl = session.page.url();
+        
         const rateOptionSelectors = [
           '.RoomOption_CTA.e16r10jm0', // Primary selector for rate option buttons
           'button.RoomOption_CTA', // Generic rate option button
@@ -947,12 +950,38 @@ router.post('/select-room', async (req, res) => {
           try {
             logger.info(`Trying to click rate option "Prenota" with selector: ${rateSelector}`);
             
-            const rateButton = await session.page.waitForSelector(rateSelector, { timeout: 3000 });
+            const rateButton = await session.page.waitForSelector(rateSelector, { timeout: 30000 });
             if (rateButton) {
-              await rateButton.click();
-              rateOptionClicked = true;
-              logger.info(`Successfully clicked rate option "Prenota" with selector: ${rateSelector}`);
-              break;
+              // Wait for element to be fully interactive
+              await session.page.waitForTimeout(1000);
+              
+              // Ensure element is visible and enabled
+              const isVisible = await rateButton.isVisible();
+              const isEnabled = await rateButton.isEnabled();
+              
+              if (isVisible && isEnabled) {
+                // Scroll to element to ensure it's in view
+                await rateButton.scrollIntoViewIfNeeded();
+                await session.page.waitForTimeout(500);
+                
+                // Click with force to ensure it registers
+                await rateButton.click({ force: true });
+                
+                // Wait a moment to see if navigation happens
+                await session.page.waitForTimeout(2000);
+                
+                // Check if URL changed (indicates successful navigation)
+                const newUrl = session.page.url();
+                if (newUrl !== currentUrl) {
+                  rateOptionClicked = true;
+                  logger.info(`Successfully clicked rate option "Prenota" with selector: ${rateSelector}`);
+                  break;
+                } else {
+                  logger.warn(`Button clicked but no navigation detected with selector: ${rateSelector}`);
+                }
+              } else {
+                logger.warn(`Button found but not clickable: visible=${isVisible}, enabled=${isEnabled}`);
+              }
             }
           } catch (error) {
             logger.debug(`Rate selector ${rateSelector} failed: ${error.message}`);
@@ -973,13 +1002,14 @@ router.post('/select-room', async (req, res) => {
 
     // Wait for navigation to customer data page
     logger.info('Waiting for navigation to customer data page...');
+    
     await session.page.waitForTimeout(5000); // Give more time for navigation
     
     // DEBUG: Get current page state
-    const currentUrl = session.page.url();
+    const finalUrl = session.page.url();
     const pageTitle = await session.page.title();
     logger.info('After clicking Prenota button:', {
-      url: currentUrl,
+      url: finalUrl,
       title: pageTitle
     });
     
