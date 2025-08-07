@@ -254,10 +254,11 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
     setExpandedRoomId(expandedRoomId === roomId ? null : roomId)
   }
 
-  const handleOptionSelect = (roomId, option) => {
+  const handleOptionSelect = (roomId, optionId) => {
+    console.log('🎯 RoomSelection.handleOptionSelect called with:', { roomId, optionId, type: typeof optionId })
     setExpandedRoomId(null)
     // Chiama la funzione originale di selezione camera con l'opzione scelta
-    onSelectRoom(roomId, option)
+    onSelectRoom(roomId, optionId)
   }
 
   return (
