@@ -980,9 +980,26 @@ router.post('/select-room', async (req, res) => {
         }
       }
       
-      // Se non è stato possibile cliccare l'opzione specifica, usa il primo bottone disponibile
-      if (!rateOptionClicked) {
-        logger.info('Falling back to first available "Prenota" button');
+      // Se non è stato possibile cliccare l'opzione specifica, fallisce l'operazione
+      if (!rateOptionClicked && optionId) {
+        logger.error(`Failed to click specific rate option ${optionId}. Operation aborted - no fallback to generic selectors.`);
+        
+        // Take screenshot for debugging
+        await session.page.screenshot({ 
+          path: `backend/logs/failed-option-selection-${sessionId}.png`,
+          fullPage: true
+        });
+        
+        return res.status(400).json({
+          error: 'Specific rate option selection failed',
+          message: `Could not select the requested rate option "${optionId}". The system will not fall back to generic options to ensure booking accuracy.`,
+          optionId: optionId
+        });
+      }
+      
+      // Solo se l'utente NON ha specificato un'opzione, usa il fallback generico
+      if (!rateOptionClicked && !optionId) {
+        logger.info('No specific option requested - falling back to first available "Prenota" button');
         
         const rateOptionSelectors = [
           '.RoomOption_CTA.e16r10jm0', // Primary selector for rate option buttons
