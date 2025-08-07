@@ -379,8 +379,20 @@ async function extractRoomsWithSelectors(page) {
                 
                 let bookSelector = null;
                 if (hasBookButton) {
-                  // Genera selector specifico per questa opzione
-                  bookSelector = `.RoomResultBlock:nth-child(${i + 1}) .RateWithOptions:nth-child(${rateIdx + 1}) .RoomOption_CTA`;
+                  // Genera selettori multipli più robusti per questa opzione specifica
+                  const roomIndex = i + 1;
+                  const optionIndex = rateIdx + 1;
+                  
+                  // Selettori ordinati dal più specifico al più generale
+                  const selectors = [
+                    `.RoomResultBlock:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) .RoomOption_CTA.e16r10jm0`,
+                    `.RoomResultBlock:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) button.RoomOption_CTA`,
+                    `.RoomResultBlock:nth-child(${roomIndex}) .e1sl87534:nth-child(${optionIndex}) .e16r10jm0`,
+                    `.RoomCard:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) button:has-text("Prenota")`,
+                    `[data-testid="room-${roomIndex}-option-${optionIndex}-book"]` // Fallback con data attribute
+                  ];
+                  
+                  bookSelector = selectors.join(', ');
                 }
                 
                 // Estrai badge "Offerta speciale" se presente
@@ -910,6 +922,9 @@ router.post('/select-room', async (req, res) => {
       
       let rateOptionClicked = false;
       
+      // Get current URL before clicking to detect navigation (needed for both specific and fallback)
+      const currentUrl = session.page.url();
+      
       // Se l'utente ha specificato un'opzione, cerca di usare il selettore specifico
       if (optionId && selectedRoom.bookingOptions) {
         const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
@@ -917,15 +932,48 @@ router.post('/select-room', async (req, res) => {
         if (selectedOption && selectedOption.bookSelector) {
           logger.info(`Trying to click specific option "${selectedOption.name}" with selector: ${selectedOption.bookSelector}`);
           
-          try {
-            const specificButton = await session.page.waitForSelector(selectedOption.bookSelector, { timeout: 3000 });
-            if (specificButton) {
-              await specificButton.click();
-              rateOptionClicked = true;
-              logger.info(`Successfully clicked specific option "${selectedOption.name}"`);
+          // Try each selector in the bookSelector (they are comma-separated)
+          const selectorList = selectedOption.bookSelector.split(', ');
+          
+          for (const selector of selectorList) {
+            try {
+              logger.info(`Trying specific selector: ${selector}`);
+              
+              const specificButton = await session.page.waitForSelector(selector.trim(), { timeout: 3000 });
+              if (specificButton) {
+                const isVisible = await specificButton.isVisible();
+                const isEnabled = await specificButton.isEnabled();
+                
+                if (isVisible && isEnabled) {
+                  // Scroll to element and ensure it's in viewport
+                  await specificButton.scrollIntoViewIfNeeded();
+                  await session.page.waitForTimeout(500);
+                  
+                  await specificButton.click();
+                  
+                  // Wait and check if navigation occurred
+                  await session.page.waitForTimeout(2000);
+                  const newUrl = session.page.url();
+                  
+                  if (newUrl !== currentUrl) {
+                    rateOptionClicked = true;
+                    logger.info(`Successfully clicked specific option "${selectedOption.name}" with selector: ${selector}`);
+                    break;
+                  } else {
+                    logger.warn(`Button clicked but no navigation with selector: ${selector}`);
+                  }
+                } else {
+                  logger.warn(`Button not interactable: visible=${isVisible}, enabled=${isEnabled}`);
+                }
+              }
+            } catch (error) {
+              logger.debug(`Selector ${selector} failed: ${error.message}`);
+              continue;
             }
-          } catch (error) {
-            logger.warn(`Specific option selector failed: ${error.message}`);
+          }
+          
+          if (!rateOptionClicked) {
+            logger.warn(`All specific selectors failed for option "${selectedOption.name}"`);
           }
         } else {
           logger.warn(`Option ${optionId} not found in room booking options or missing selector`);
@@ -935,9 +983,6 @@ router.post('/select-room', async (req, res) => {
       // Se non è stato possibile cliccare l'opzione specifica, usa il primo bottone disponibile
       if (!rateOptionClicked) {
         logger.info('Falling back to first available "Prenota" button');
-        
-        // Get current URL before clicking to detect navigation
-        const currentUrl = session.page.url();
         
         const rateOptionSelectors = [
           '.RoomOption_CTA.e16r10jm0', // Primary selector for rate option buttons
