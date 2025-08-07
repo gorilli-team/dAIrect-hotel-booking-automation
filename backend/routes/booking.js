@@ -925,58 +925,149 @@ router.post('/select-room', async (req, res) => {
       // Get current URL before clicking to detect navigation (needed for both specific and fallback)
       const currentUrl = session.page.url();
       
-      // Se l'utente ha specificato un'opzione, cerca di usare il selettore specifico
+      // Se l'utente ha specificato un'opzione, usa analisi DOM dinamica
       if (optionId && selectedRoom.bookingOptions) {
         const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
         
-        if (selectedOption && selectedOption.bookSelector) {
-          logger.info(`Trying to click specific option "${selectedOption.name}" with selector: ${selectedOption.bookSelector}`);
+        if (selectedOption) {
+          logger.info(`Trying to click specific option "${selectedOption.name}" using dynamic DOM analysis`);
           
-          // Try each selector in the bookSelector (they are comma-separated)
-          const selectorList = selectedOption.bookSelector.split(', ');
-          
-          for (const selector of selectorList) {
-            try {
-              logger.info(`Trying specific selector: ${selector}`);
+          // Usa analisi DOM dinamica per trovare il bottone corretto
+          const dynamicSelector = await session.page.evaluate((optionData) => {
+            // Trova tutti i bottoni nella pagina che potrebbero essere "Prenota"
+            const allButtons = Array.from(document.querySelectorAll('button, .RoomOption_CTA, [class*="CTA"], [class*="book"], [class*="Book"]'));
+            
+            // Filtra solo quelli che contengono "Prenota" nel testo
+            const prenotaButtons = allButtons.filter(btn => {
+              const btnText = btn.textContent || btn.innerText || '';
+              return btnText.toLowerCase().includes('prenota');
+            });
+            
+            console.log(`Found ${prenotaButtons.length} Prenota buttons`);
+            
+            // Cerca il bottone associato all'opzione specifica
+            for (let i = 0; i < prenotaButtons.length; i++) {
+              const button = prenotaButtons[i];
               
-              const specificButton = await session.page.waitForSelector(selector.trim(), { timeout: 3000 });
-              if (specificButton) {
-                const isVisible = await specificButton.isVisible();
-                const isEnabled = await specificButton.isEnabled();
+              // Cerca il container padre che contiene informazioni sull'opzione
+              let parent = button.parentElement;
+              let attempts = 0;
+              
+              while (parent && attempts < 5) {
+                const parentText = (parent.textContent || parent.innerText || '').toLowerCase();
+                const optionNameLower = optionData.name.toLowerCase();
+                const optionPriceStr = optionData.price.toString();
                 
-                if (isVisible && isEnabled) {
-                  // Scroll to element and ensure it's in viewport
-                  await specificButton.scrollIntoViewIfNeeded();
-                  await session.page.waitForTimeout(500);
+                // Verifica se il testo del parent contiene informazioni dell'opzione
+                // Usiamo substring per evitare match troppo stringenti
+                const containsOptionName = optionNameLower.length > 10 ? 
+                  parentText.includes(optionNameLower.substring(0, 15)) : false;
+                const containsPrice = parentText.includes(optionPriceStr) || 
+                                     parentText.includes(optionData.price.toFixed(2));
+                
+                // Cerca anche pattern specifici come "rivendibile", "prepaga", etc.
+                const containsKeywords = (
+                  (optionNameLower.includes('rivendibile') && parentText.includes('rivendibile')) ||
+                  (optionNameLower.includes('prepaga') && parentText.includes('prepaga')) ||
+                  (optionNameLower.includes('paga solo') && parentText.includes('paga solo')) ||
+                  (optionNameLower.includes('takyon') && parentText.includes('takyon'))
+                );
+                
+                if (containsOptionName || containsPrice || containsKeywords) {
+                  // Genera un selettore CSS unico per questo elemento
+                  const buttonClasses = Array.from(button.classList).filter(c => c.length > 0).join('.');
+                  const buttonTagName = button.tagName.toLowerCase();
+                  const parentClasses = parent.className ? parent.className.split(' ').filter(c => c.length > 0).join('.') : null;
                   
-                  await specificButton.click();
+                  // Calcola l'indice del bottone nel parent
+                  const allButtonsInParent = Array.from(parent.querySelectorAll('button, [class*="CTA"]'));
+                  const buttonIndex = allButtonsInParent.indexOf(button);
                   
-                  // Wait and check if navigation occurred
-                  await session.page.waitForTimeout(2000);
-                  const newUrl = session.page.url();
-                  
-                  if (newUrl !== currentUrl) {
-                    rateOptionClicked = true;
-                    logger.info(`Successfully clicked specific option "${selectedOption.name}" with selector: ${selector}`);
-                    break;
-                  } else {
-                    logger.warn(`Button clicked but no navigation with selector: ${selector}`);
-                  }
-                } else {
-                  logger.warn(`Button not interactable: visible=${isVisible}, enabled=${isEnabled}`);
+                  return {
+                    found: true,
+                    selector: buttonClasses ? `.${buttonClasses}` : `${buttonTagName}:nth-of-type(${buttonIndex + 1})`,
+                    parentSelector: parentClasses ? `.${parentClasses}` : null,
+                    combinedSelector: parentClasses && buttonClasses ? 
+                      `.${parentClasses} .${buttonClasses}` : null,
+                    indexBasedSelector: parentClasses ? 
+                      `.${parentClasses} ${buttonTagName}:nth-of-type(${buttonIndex + 1})` : null,
+                    textMatch: { 
+                      containsOptionName, 
+                      containsPrice, 
+                      containsKeywords,
+                      parentText: parentText.substring(0, 100),
+                      optionNameUsed: optionNameLower.substring(0, 15)
+                    }
+                  };
                 }
+                
+                parent = parent.parentElement;
+                attempts++;
               }
-            } catch (error) {
-              logger.debug(`Selector ${selector} failed: ${error.message}`);
-              continue;
             }
+            
+            return { found: false, reason: 'No matching button found for option', totalButtons: prenotaButtons.length };
+          }, selectedOption);
+          
+          if (dynamicSelector.found) {
+            logger.info('Dynamic selector analysis successful:', dynamicSelector);
+            
+            // Prova i selettori generati dinamicamente in ordine di precisione
+            const selectorsToTry = [
+              dynamicSelector.combinedSelector,
+              dynamicSelector.indexBasedSelector,
+              dynamicSelector.selector,
+              dynamicSelector.parentSelector ? `${dynamicSelector.parentSelector} button` : null,
+              dynamicSelector.parentSelector ? `${dynamicSelector.parentSelector} [class*="CTA"]` : null
+            ].filter(Boolean);
+            
+            for (const selector of selectorsToTry) {
+              try {
+                logger.info(`Trying dynamic selector: ${selector}`);
+                
+                const elements = await session.page.$$(selector);
+                
+                for (const element of elements) {
+                  const isVisible = await element.isVisible();
+                  const isEnabled = await element.isEnabled();
+                  const buttonText = await element.textContent();
+                  
+                  if (isVisible && isEnabled && buttonText?.includes('Prenota')) {
+                    // Scroll to element and ensure it's in viewport
+                    await element.scrollIntoViewIfNeeded();
+                    await session.page.waitForTimeout(500);
+                    
+                    await element.click();
+                    
+                    // Wait and check if navigation occurred
+                    await session.page.waitForTimeout(2000);
+                    const newUrl = session.page.url();
+                    
+                    if (newUrl !== currentUrl) {
+                      rateOptionClicked = true;
+                      logger.info(`Successfully clicked specific option "${selectedOption.name}" with dynamic selector: ${selector}`);
+                      break;
+                    } else {
+                      logger.warn(`Button clicked but no navigation with selector: ${selector}`);
+                    }
+                  }
+                }
+                
+                if (rateOptionClicked) break;
+              } catch (error) {
+                logger.debug(`Dynamic selector ${selector} failed: ${error.message}`);
+                continue;
+              }
+            }
+          } else {
+            logger.warn('Dynamic selector analysis failed:', dynamicSelector);
           }
           
           if (!rateOptionClicked) {
-            logger.warn(`All specific selectors failed for option "${selectedOption.name}"`);
+            logger.warn(`Dynamic DOM analysis failed for option "${selectedOption.name}"`);
           }
         } else {
-          logger.warn(`Option ${optionId} not found in room booking options or missing selector`);
+          logger.warn(`Option ${optionId} not found in room booking options`);
         }
       }
       
