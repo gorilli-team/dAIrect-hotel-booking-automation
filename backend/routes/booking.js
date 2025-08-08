@@ -977,7 +977,105 @@ router.post('/select-room', async (req, res) => {
             logger.debug(`Precomputed selector failed: ${e.message}`);
           }
         }
-        // 3) Se non riuscito, prova selezione basata su indice dall'optionId (es. rate-1-2)
+        // 3) Se non riuscito, prova match ESATTO per prezzo nel cassetto (con normalizzazione punti/virgole)
+        if (!rateOptionClicked) {
+          try {
+            const targetPrice = Number.isFinite(selectedOption.price) ? selectedOption.price : null;
+            if (targetPrice !== null) {
+              const normalizeToNumber = (txt) => {
+                try {
+                  if (!txt) return NaN;
+                  let cleaned = (txt + '').replace(/[^0-9.,]/g, '');
+                  if (cleaned.includes('.') && cleaned.includes(',')) {
+                    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+                  } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+                    cleaned = cleaned.replace(',', '.');
+                  } else if (cleaned.includes('.') && !cleaned.includes(',')) {
+                    const parts = cleaned.split('.');
+                    if (parts.length > 2 || (parts[1] && parts[1].length > 2)) {
+                      cleaned = cleaned.replace(/\./g, '');
+                    }
+                  }
+                  const num = parseFloat(cleaned);
+                  return isNaN(num) ? NaN : num;
+                } catch { return NaN; }
+              };
+
+              const targetCents = Math.round(targetPrice * 100);
+              const ratesInRoom = roomScope.locator('.RateWithOptions, .e1sl87534');
+              const rateCount = await ratesInRoom.count();
+              logger.info(`Price-match attempt: targetPrice=${targetPrice} (cents=${targetCents}), rateCount=${rateCount}`);
+
+              let matchedIndexByPrice = -1;
+              let matchedIndexByPriceAndTitle = -1;
+
+              for (let r = 0; r < rateCount; r++) {
+                try {
+                  const rateLoc = ratesInRoom.nth(r);
+                  const priceEl = rateLoc.locator('.mainAmount span, .eiup2eu2 span').first();
+                  const priceText = await priceEl.textContent().catch(() => null);
+                  const num = normalizeToNumber(priceText);
+                  const cents = Math.round((num || 0) * 100);
+
+                  logger.info(`Price-match check rate ${r + 1}: text='${(priceText || '').trim()}', parsed=${num}, cents=${cents}`);
+
+                  if (!isNaN(num) && cents === targetCents) {
+                    if (matchedIndexByPrice === -1) matchedIndexByPrice = r;
+
+                    // Check also by title substring for stronger match
+                    const txt = (await rateLoc.textContent().catch(() => '') || '').toLowerCase();
+                    const nameLower = (selectedOption.name || '').toLowerCase();
+                    const probe = nameLower.substring(0, Math.min(15, nameLower.length));
+                    if (probe && txt.includes(probe)) {
+                      matchedIndexByPriceAndTitle = r;
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  logger.debug(`Price-match scan error on rate ${r + 1}: ${e.message}`);
+                }
+              }
+
+              const chosenIndex = matchedIndexByPriceAndTitle !== -1 ? matchedIndexByPriceAndTitle : matchedIndexByPrice;
+
+              if (chosenIndex !== -1) {
+                const targetRate = ratesInRoom.nth(chosenIndex);
+                const bookBtn = targetRate.locator(
+                  'button:has-text("Prenota"):not(:has-text("Info")), .RoomOption_CTA:has-text("Prenota"), button.e16r10jm0:has-text("Prenota"), button:has(.CTA_Text:has-text("Prenota"))'
+                ).first();
+                if (await bookBtn.count() > 0) {
+                  await bookBtn.scrollIntoViewIfNeeded();
+                  await session.page.screenshot({ 
+                    path: `backend/logs/price-matched-rate-${sessionId}-${optionId.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+                    fullPage: true
+                  });
+                  await bookBtn.click({ timeout: 5000 });
+                  await session.page.waitForTimeout(1500);
+                  const newUrl = session.page.url();
+                  const successBySelectors = await Promise.race([
+                    session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
+                  ]);
+                  if (newUrl !== currentUrl || successBySelectors) {
+                    rateOptionClicked = true;
+                    logger.info(`🎯 SUCCESS! Clicked rate by exact price match in scoped room (index=${chosenIndex + 1})`);
+                  } else {
+                    logger.warn('Price-matched Prenota clicked but no navigation indicators detected');
+                  }
+                } else {
+                  logger.warn('No Prenota button found in price-matched rate container');
+                }
+              } else {
+                logger.info('No rate matched exactly by price in drawer');
+              }
+            }
+          } catch (e) {
+            logger.debug(`Price-based match failed (non-bloccante): ${e.message}`);
+          }
+        }
+
+        // 4) Se non riuscito, prova selezione basata su indice dall'optionId (es. rate-1-2)
         if (!rateOptionClicked) {
           try {
             let optionIndex = null;
