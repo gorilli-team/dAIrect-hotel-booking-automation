@@ -963,9 +963,14 @@ router.post('/select-room', async (req, res) => {
 
         // Assicurati che il cassetto (collapse) sia visibile all'interno della stanza
         try {
-          const expandToggle = roomScope.locator('[aria-expanded="false"], .expand, button:has-text("Info e prenota")').first();
-          if (await expandToggle.count() > 0) {
-            await expandToggle.click({ timeout: 2000 }).catch(() => {});
+          // Se le opzioni tariffarie sono già visibili, non fare nulla
+          const optionsVisible = await roomScope.locator('.RateWithOptions, .e1sl87534').first().isVisible({ timeout: 500 }).catch(() => false);
+          if (!optionsVisible) {
+            // Prova ad espandere SOLO con toggle/collapse, non ricliccare "Info e prenota"
+            const expandToggle = roomScope.locator('[aria-expanded="false"], .expand, .RoomCard_CTA[aria-expanded="false"]').first();
+            if (await expandToggle.count() > 0) {
+              await expandToggle.click({ timeout: 2000 }).catch(() => {});
+            }
           }
         } catch {}
         await session.page.waitForTimeout(800);
