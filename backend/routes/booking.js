@@ -5,6 +5,18 @@ const logger = require('../utils/logger');
 const playwrightService = require('../services/playwrightSteps');
 const aiService = require('../services/aiSelector');
 
+// Utility: format currency like the original site (e.g., "€ 1.527,12")
+function formatCurrencyIT(amount) {
+  try {
+    const n = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (!isNaN(n)) {
+      const base = n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return `€ ${base}`;
+    }
+  } catch {}
+  return null;
+}
+
 // Funzione per costruire URL diretto SimpleBooking
 function buildDirectSearchUrl(searchParams) {
   const baseUrl = process.env.TARGET_HOTEL_URL || 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR';
@@ -403,11 +415,13 @@ async function extractRoomsWithSelectors(page) {
                   specialOffer = true;
                 }
                 
+                const priceNumber = parseFloat(ratePrice);
                 const bookingOption = {
                   id: `rate-${i + 1}-${rateIdx + 1}`,
                   name: rateTitle.trim(),
                   description: rateDescription ? rateDescription.trim().substring(0, 500) : null,
-                  price: parseFloat(ratePrice),
+                  price: priceNumber,
+                  formattedPrice: formatCurrencyIT(priceNumber),
                   currency: 'EUR',
                   mealPlan: mealPlan,
                   cancellationPolicy: cancellationPolicy,
@@ -515,10 +529,12 @@ async function extractRoomsWithSelectors(page) {
         const limitedAvailElement = roomCard.locator('.enongdq2, :has-text("Ne resta solo"), :has-text("Ne restano solo")');
         const limitedAvailText = await limitedAvailElement.textContent().catch(() => null);
         
+        const roomPriceNumber = parseInt(price) || 99;
         const room = {
           id: `room-${i + 1}`,
           name: title.trim(),
-          price: parseInt(price) || 99,
+          price: roomPriceNumber,
+          formattedPrice: formatCurrencyIT(roomPriceNumber),
           currency: 'EUR',
           description: description.trim().substring(0, 200), // Increased length for longer descriptions
           features: detailedFeatures.length > 0 ? detailedFeatures : ['WiFi gratuito', 'Aria condizionata'], // Use extracted features
