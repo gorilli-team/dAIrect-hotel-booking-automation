@@ -3,7 +3,7 @@ import axios from 'axios'
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: '/api/booking',
-  timeout: 120000, // 2 minutes timeout for long operations
+  timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json'
   }
