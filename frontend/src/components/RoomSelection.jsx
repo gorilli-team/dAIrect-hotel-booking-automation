@@ -254,10 +254,11 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
     setExpandedRoomId(expandedRoomId === roomId ? null : roomId)
   }
 
-  const handleOptionSelect = (roomId, option) => {
+  const handleOptionSelect = (roomId, optionId) => {
+    console.log('🎯 RoomSelection.handleOptionSelect called with:', { roomId, optionId, type: typeof optionId })
     setExpandedRoomId(null)
     // Chiama la funzione originale di selezione camera con l'opzione scelta
-    onSelectRoom(roomId, option)
+    onSelectRoom(roomId, optionId)
   }
 
   return (
@@ -299,7 +300,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                       <div className="mb-4">
                         <div className="mb-3">
                           <span className="text-3xl font-bold text-blue-600">
-                            €{room.price}
+                            {room.formattedPrice || new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(room.price)}
                           </span>
                           <span className="text-gray-500 ml-2">per notte</span>
                         </div>
@@ -437,7 +438,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                           {/* Prezzo con eventuale sconto */}
                           <div className="mb-3">
                             <div className="flex items-baseline gap-2">
-                              <span className="text-lg font-bold text-gray-900">€{option.price}</span>
+                              <span className="text-lg font-bold text-gray-900">{option.formattedPrice || new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(option.price)}</span>
                               {option.discountInfo && (
                                 <>
                                   <span className="text-sm text-gray-500 line-through">{option.discountInfo.originalPrice}</span>
@@ -481,7 +482,7 @@ const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
                             onClick={() => handleOptionSelect(room.id, option.id)}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors"
                           >
-                            Prenota €{option.price}
+                            Prenota {option.formattedPrice || new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(option.price)}
                           </button>
                         </div>
                       ))

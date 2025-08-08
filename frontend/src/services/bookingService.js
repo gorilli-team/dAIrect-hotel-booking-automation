@@ -89,6 +89,8 @@ export const bookingService = {
    */
   async selectRoom(sessionId, roomId, optionId = null) {
     try {
+      console.log('🔍 bookingService.selectRoom called with:', { sessionId, roomId, optionId, type: typeof optionId })
+      
       const requestData = {
         sessionId,
         roomId
@@ -97,7 +99,12 @@ export const bookingService = {
       // Aggiungi optionId solo se specificato
       if (optionId) {
         requestData.optionId = optionId
+        console.log('✅ Adding optionId to request:', optionId)
+      } else {
+        console.log('⚠️ No optionId provided, will use fallback selectors')
       }
+      
+      console.log('📤 Final request data:', requestData)
       
       const response = await api.post('/select-room', requestData)
       

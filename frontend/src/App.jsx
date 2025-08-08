@@ -63,9 +63,9 @@ function App() {
     }
   }
 
-  const handleRoomSelect = async (roomId) => {
+  const handleRoomSelect = async (roomId, optionId = null) => {
     try {
-      const result = await selectRoom(roomId)
+      const result = await selectRoom(roomId, optionId)
       if (result.success) {
         toast.success('Camera selezionata!')
       }

@@ -979,6 +979,63 @@ async function fillCustomerDataForm(page, customerData, selectors) {
   }
 }
 
+// Generic overlay closer to dismiss popups/modals that can block clicks
+async function closeOverlays(page, options = { aggressive: false, maxMs: 800 }) {
+  try {
+    const start = Date.now();
+    const maxMs = typeof options.maxMs === 'number' ? options.maxMs : 800;
+    const candidates = [
+      '.cookie-notice', '.klaro', '.cm-popup', '[data-klaro]',
+      '.cookie-banner', '.cookie-consent', '.cookie-consent-banner',
+      '.modal', '.modal.show', '.ReactModal__Overlay', '.overlay', '[role="dialog"]',
+      '[class*="overlay"][class*="visible"], [class*="modal"][class*="open"]'
+    ];
+
+    for (const sel of candidates) {
+      if (Date.now() - start > maxMs) break;
+      const loc = page.locator(sel).first();
+      const visible = await loc.isVisible({ timeout: 50 }).catch(() => false);
+      if (!visible) continue;
+
+      const actions = [
+        'button:has-text("Accetta")',
+        'button:has-text("Accept")',
+        'button:has-text("Accetta tutto")',
+        'button:has-text("Consent")',
+        'button:has-text("Chiudi")',
+        'button:has-text("Ok")',
+        'button:has-text("OK")',
+        'button:has-text("Continua")',
+        'a:has-text("Chiudi")',
+        '.cm-btn-accept, .cm-btn-accept-all',
+        '.cm-btn-decline, [data-klaro-action="decline-all"]',
+        '[data-klaro-action="accept-all"]',
+        '.close, .modal-close, [aria-label="Close"], button[aria-label="close"]'
+      ];
+
+      for (const act of actions) {
+        if (Date.now() - start > maxMs) break;
+        const btn = page.locator(`${sel} ${act}`).first();
+        try {
+          if (await btn.isVisible({ timeout: 50 }).catch(() => false)) {
+            await btn.click({ timeout: 200 }).catch(() => {});
+          }
+        } catch {}
+      }
+    }
+
+    // Optional last resort
+    if (options.aggressive) {
+      await page.evaluate(() => {
+        const hide = (el) => { try { el.style.setProperty('display','none','important'); el.style.setProperty('visibility','hidden','important'); el.style.setProperty('opacity','0','important'); } catch(e){} };
+        document.querySelectorAll('.cookie-notice, .klaro, .cm-popup, [data-klaro], .cookie-banner, .cookie-consent, .modal, .ReactModal__Overlay, .overlay, [role="dialog"]').forEach(hide);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    // Never block on overlays
+  }
+}
+
 module.exports = {
   analyzeSearchPage,
   analyzeRoomsPage,
@@ -994,5 +1051,6 @@ module.exports = {
   COOKIE_SELECTORS,
   AVAILABILITY_RESULTS_SELECTORS,
   CUSTOMER_DATA_SELECTORS,
-  BOOKING_COMPLETION_SELECTORS
+  BOOKING_COMPLETION_SELECTORS,
+  closeOverlays
 };
