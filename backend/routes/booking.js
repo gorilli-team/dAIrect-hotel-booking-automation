@@ -1056,31 +1056,59 @@ router.post('/select-room', async (req, res) => {
 
               if (chosenIndex !== -1) {
                 const targetRate = ratesInRoom.nth(chosenIndex);
-                const bookBtn = targetRate.locator(
-                  'button:has-text("Prenota"):not(:has-text("Info")), .RoomOption_CTA:has-text("Prenota"), button.e16r10jm0:has-text("Prenota"), button:has(.CTA_Text:has-text("Prenota"))'
-                ).first();
-                if (await bookBtn.count() > 0) {
-                  await bookBtn.scrollIntoViewIfNeeded();
-                  await session.page.screenshot({ 
-                    path: `backend/logs/price-matched-rate-${sessionId}-${optionId.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
-                    fullPage: true
-                  });
-                  await bookBtn.click({ timeout: 5000 });
-                  await session.page.waitForTimeout(1500);
-                  const newUrl = session.page.url();
-                  const successBySelectors = await Promise.race([
-                    session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
-                    session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
-                    session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
-                  ]);
-                  if (newUrl !== currentUrl || successBySelectors) {
-                    rateOptionClicked = true;
-                    logger.info(`🎯 SUCCESS! Clicked rate by exact price match in scoped room (index=${chosenIndex + 1})`);
-                  } else {
-                    logger.warn('Price-matched Prenota clicked but no navigation indicators detected');
+                await targetRate.scrollIntoViewIfNeeded();
+
+                const candidateSelectors = [
+                  'button:has-text("Prenota"):not(:has-text("Info"))',
+                  '.RoomOption_CTA:has-text("Prenota")',
+                  '.RoomOption_CTA .CTA_Text:has-text("Prenota")',
+                  '.e16r10jm0:has-text("Prenota")',
+                  '[class*="CTA"]:has-text("Prenota")',
+                  '[role="button"]:has-text("Prenota")',
+                  'a.RoomOption_CTA',
+                  'a:has(.CTA_Text:has-text("Prenota"))'
+                ];
+
+                let clickedByPrice = false;
+                for (const sel of candidateSelectors) {
+                  try {
+                    const btnLoc = targetRate.locator(sel).first();
+                    if (await btnLoc.count() > 0) {
+                      const isVisible = await btnLoc.isVisible().catch(() => true);
+                      if (!isVisible) {
+                        await btnLoc.scrollIntoViewIfNeeded().catch(() => {});
+                        await session.page.waitForTimeout(200);
+                      }
+                      await session.page.screenshot({ 
+                        path: `backend/logs/price-matched-rate-${sessionId}-${optionId.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+                        fullPage: true
+                      });
+                      await btnLoc.click({ timeout: 5000, force: true }).catch(async () => {
+                        // Fallback: evaluate-based click if Playwright click fails
+                        const handle = await btnLoc.elementHandle();
+                        if (handle) await handle.evaluate(el => el.click());
+                      });
+                      await session.page.waitForTimeout(1500);
+                      const newUrl = session.page.url();
+                      const successBySelectors = await Promise.race([
+                        session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
+                        session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
+                        session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
+                      ]);
+                      if (newUrl !== currentUrl || successBySelectors) {
+                        rateOptionClicked = true;
+                        clickedByPrice = true;
+                        logger.info(`🎯 SUCCESS! Clicked rate by exact price match in scoped room (index=${chosenIndex + 1}) using selector: ${sel}`);
+                        break;
+                      }
+                    }
+                  } catch (e) {
+                    logger.debug(`Price-matched click attempt failed for selector '${sel}': ${e.message}`);
                   }
-                } else {
-                  logger.warn('No Prenota button found in price-matched rate container');
+                }
+
+                if (!clickedByPrice) {
+                  logger.warn('No Prenota button found/clickable in price-matched rate container after trying candidates');
                 }
               } else {
                 logger.info('No rate matched exactly by price in drawer');
