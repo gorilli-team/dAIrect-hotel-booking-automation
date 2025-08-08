@@ -307,7 +307,7 @@ async function extractRoomsWithSelectors(page) {
                 
                 // Estrai prezzo della tariffa
                 let ratePrice = '0';
-                const ratePriceElement = rateOption.locator('.mainAmount span, .eiup2eu2 span').first();
+                const ratePriceElement = rateOption.locator('.mainAmount, .eiup2eu2').first();
                 const ratePriceText = await ratePriceElement.textContent().catch(() => null);
                 
                 if (ratePriceText) {
@@ -1012,7 +1012,7 @@ router.post('/select-room', async (req, res) => {
               for (let r = 0; r < rateCount; r++) {
                 try {
                   const rateLoc = ratesInRoom.nth(r);
-                  const priceEl = rateLoc.locator('.mainAmount span, .eiup2eu2 span').first();
+                  const priceEl = rateLoc.locator('.mainAmount, .eiup2eu2').first();
                   const priceText = await priceEl.textContent().catch(() => null);
                   const num = normalizeToNumber(priceText);
                   const cents = Math.round((num || 0) * 100);
