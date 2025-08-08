@@ -295,17 +295,6 @@ async function extractRoomsWithSelectors(page) {
     };
   }
 }
-    
-  } catch (error) {
-    logger.error('Failed to extract rooms with selectors:', error);
-    return {
-      success: false,
-      rooms: [],
-      totalRooms: 0,
-      message: 'No rooms found with direct selectors'
-    };
-  }
-}
 
 const router = express.Router();
 
