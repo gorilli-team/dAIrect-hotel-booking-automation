@@ -9,7 +9,7 @@ const AVAILABLE_HOTELS = [
     name: 'Palazzo Vitturi',
     location: 'Venezia',
     emoji: '🏛️',
-    baseUrl: 'https://palazzovitturi.simplebooking.it',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR',
     description: 'Elegante palazzo storico nel cuore di Venezia'
   },
   {
