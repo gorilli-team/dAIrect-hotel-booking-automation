@@ -925,168 +925,209 @@ router.post('/select-room', async (req, res) => {
       // Get current URL before clicking to detect navigation (needed for both specific and fallback)
       const currentUrl = session.page.url();
       
-      // Se l'utente ha specificato un'opzione, usa analisi DOM dinamica
-      if (optionId && selectedRoom.bookingOptions) {
-        const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
+    // Se l'utente ha specificato un'opzione, usa selettori precisi e scoping per stanza
+    if (optionId && selectedRoom.bookingOptions) {
+      const selectedOption = selectedRoom.bookingOptions.find(option => option.id === optionId);
+      
+      if (selectedOption) {
+        logger.info(`Trying to click specific option "${selectedOption.name}" with scoped strategy`);
+
+        // 1) Scope: individua la card della stanza selezionata
+        let roomIndex = null;
+        try {
+          // roomId ha formato 'room-<index>'
+          const parts = (roomId || '').split('-');
+          if (parts.length === 2) roomIndex = parseInt(parts[1]);
+        } catch {}
         
-        if (selectedOption) {
-          logger.info(`Trying to click specific option "${selectedOption.name}" using dynamic DOM analysis`);
-          
-          // Usa analisi DOM dinamica per trovare il bottone corretto
-          const dynamicSelector = await session.page.evaluate((optionData) => {
-            // Trova tutti i bottoni nella pagina che potrebbero essere "Prenota"
-            const allButtons = Array.from(document.querySelectorAll('button, .RoomOption_CTA, [class*="CTA"], [class*="book"], [class*="Book"]'));
-            
-            // Filtra solo quelli che contengono "Prenota" nel testo
-            const prenotaButtons = allButtons.filter(btn => {
-              const btnText = btn.textContent || btn.innerText || '';
-              return btnText.toLowerCase().includes('prenota');
-            });
-            
-            console.log(`Found ${prenotaButtons.length} Prenota buttons`);
-            
-            // Cerca il bottone associato all'opzione specifica
-            for (let i = 0; i < prenotaButtons.length; i++) {
-              const button = prenotaButtons[i];
-              
-              // Cerca il container padre che contiene informazioni sull'opzione
-              let parent = button.parentElement;
-              let attempts = 0;
-              
-              while (parent && attempts < 5) {
-                const parentText = (parent.textContent || parent.innerText || '').toLowerCase();
-                const optionNameLower = optionData.name.toLowerCase();
-                const optionPriceStr = optionData.price.toString();
-                
-                // Verifica se il testo del parent contiene informazioni dell'opzione
-                // Usiamo substring per evitare match troppo stringenti
-                const containsOptionName = optionNameLower.length > 10 ? 
-                  parentText.includes(optionNameLower.substring(0, 15)) : false;
-                const containsPrice = parentText.includes(optionPriceStr) || 
-                                     parentText.includes(optionData.price.toFixed(2));
-                
-                // Cerca anche pattern specifici come "rivendibile", "prepaga", etc.
-                const containsKeywords = (
-                  (optionNameLower.includes('rivendibile') && parentText.includes('rivendibile')) ||
-                  (optionNameLower.includes('prepaga') && parentText.includes('prepaga')) ||
-                  (optionNameLower.includes('paga solo') && parentText.includes('paga solo')) ||
-                  (optionNameLower.includes('takyon') && parentText.includes('takyon'))
-                );
-                
-                if (containsOptionName || containsPrice || containsKeywords) {
-                  // Genera un selettore CSS unico per questo elemento
-                  const buttonClasses = Array.from(button.classList).filter(c => c.length > 0).join('.');
-                  const buttonTagName = button.tagName.toLowerCase();
-                  const parentClasses = parent.className ? parent.className.split(' ').filter(c => c.length > 0).join('.') : null;
-                  
-                  // Calcola l'indice del bottone nel parent
-                  const allButtonsInParent = Array.from(parent.querySelectorAll('button, [class*="CTA"]'));
-                  const buttonIndex = allButtonsInParent.indexOf(button);
-                  
-                  return {
-                    found: true,
-                    selector: buttonClasses ? `.${buttonClasses}` : `${buttonTagName}:nth-of-type(${buttonIndex + 1})`,
-                    parentSelector: parentClasses ? `.${parentClasses}` : null,
-                    combinedSelector: parentClasses && buttonClasses ? 
-                      `.${parentClasses} .${buttonClasses}` : null,
-                    indexBasedSelector: parentClasses ? 
-                      `.${parentClasses} ${buttonTagName}:nth-of-type(${buttonIndex + 1})` : null,
-                    textMatch: { 
-                      containsOptionName, 
-                      containsPrice, 
-                      containsKeywords,
-                      parentText: parentText.substring(0, 100),
-                      optionNameUsed: optionNameLower.substring(0, 15)
-                    }
-                  };
+        const roomCards = session.page.locator('.RoomCard, .RoomResultBlock, .ekc2wag12, .eio1k2u2');
+        const roomScope = Number.isInteger(roomIndex) && roomIndex > 0
+          ? roomCards.nth(roomIndex - 1)
+          : roomCards.first();
+
+        // Assicurati che il cassetto (collapse) sia visibile all'interno della stanza
+        try {
+          const expandToggle = roomScope.locator('[aria-expanded="false"], .expand, button:has-text("Info e prenota")').first();
+          if (await expandToggle.count() > 0) {
+            await expandToggle.click({ timeout: 2000 }).catch(() => {});
+          }
+        } catch {}
+        await session.page.waitForTimeout(800);
+
+        // 2) Prova prima con il selettore precomputato specifico
+        if (selectedOption.bookSelector) {
+          try {
+            logger.info(`Trying precomputed bookSelector: ${selectedOption.bookSelector}`);
+            const precomputed = roomScope.locator(selectedOption.bookSelector).first();
+            if (await precomputed.count() > 0) {
+              await precomputed.scrollIntoViewIfNeeded();
+              await precomputed.click({ timeout: 3000 });
+              await session.page.waitForTimeout(1500);
+              const newUrl = session.page.url();
+              if (newUrl !== currentUrl) {
+                rateOptionClicked = true;
+                logger.info('🎉 SUCCESS! Clicked with precomputed selector');
+              } else {
+                logger.warn('Precomputed selector clicked but URL did not change');
+              }
+            } else {
+              logger.warn('Precomputed selector not found in room scope');
+            }
+          } catch (e) {
+            logger.debug(`Precomputed selector failed: ${e.message}`);
+          }
+        }
+        // 3) Se non riuscito, prova selezione basata su indice dall'optionId (es. rate-1-2)
+        if (!rateOptionClicked) {
+          try {
+            let optionIndex = null;
+            const parts = (optionId || '').split('-');
+            if (parts.length === 3) optionIndex = parseInt(parts[2]);
+            if (Number.isInteger(optionIndex) && optionIndex > 0) {
+              const ratesInRoom = roomScope.locator('.RateWithOptions, .e1sl87534');
+              const rateCount = await ratesInRoom.count();
+              logger.info(`Index-based fallback: optionIndex=${optionIndex}, rateCount=${rateCount}`);
+              if (rateCount >= optionIndex) {
+                const targetRateByIndex = ratesInRoom.nth(optionIndex - 1);
+                const bookBtn = targetRateByIndex.locator(
+                  'button:has-text("Prenota"):not(:has-text("Info")), .RoomOption_CTA:has-text("Prenota"), button.e16r10jm0:has-text("Prenota"), button:has(.CTA_Text:has-text("Prenota"))'
+                ).first();
+                if (await bookBtn.count() > 0) {
+                  await bookBtn.scrollIntoViewIfNeeded();
+                  await session.page.screenshot({ 
+                    path: `backend/logs/indexed-rate-${sessionId}-${optionId.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+                    fullPage: true
+                  });
+                  await bookBtn.click({ timeout: 5000 });
+                  // Success conditions: URL changed OR personal/guarantee/payment page elements appeared
+                  await session.page.waitForTimeout(1500);
+                  const newUrl = session.page.url();
+                  const successBySelectors = await Promise.race([
+                    session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
+                  ]);
+                  if (newUrl !== currentUrl || successBySelectors) {
+                    rateOptionClicked = true;
+                    logger.info('🎉 SUCCESS! Clicked rate by index-based fallback in scoped room');
+                  } else {
+                    logger.warn('Index-based Prenota clicked but no navigation indicators detected');
+                  }
+                } else {
+                  logger.warn('No Prenota button found in indexed rate container');
                 }
-                
-                parent = parent.parentElement;
-                attempts++;
               }
             }
-            
-            return { found: false, reason: 'No matching button found for option', totalButtons: prenotaButtons.length };
-          }, selectedOption);
-          
-          if (dynamicSelector.found) {
-            logger.info('Dynamic selector analysis successful:', dynamicSelector);
-            
-            // Prova i selettori generati dinamicamente in ordine di precisione
-            const selectorsToTry = [
-              dynamicSelector.combinedSelector,
-              dynamicSelector.indexBasedSelector,
-              dynamicSelector.selector,
-              dynamicSelector.parentSelector ? `${dynamicSelector.parentSelector} button` : null,
-              dynamicSelector.parentSelector ? `${dynamicSelector.parentSelector} [class*="CTA"]` : null
-            ].filter(Boolean);
-            
-            for (const selector of selectorsToTry) {
+          } catch (e) {
+            logger.debug(`Index-based rate click failed: ${e.message}`);
+          }
+        }
+
+        // 4) Se non riuscito, trova la tariffa per titolo (e optional prezzo) e clicca il suo Prenota
+        if (!rateOptionClicked) {
+          try {
+            const ratesInRoom = roomScope.locator('.RateWithOptions, .e1sl87534');
+            // Filtro per titolo della tariffa con confronto più permissivo
+            const targetRate = await ratesInRoom.elementHandles();
+            let matchedHandle = null;
+            for (const handle of targetRate) {
               try {
-                logger.info(`Trying dynamic selector: ${selector}`);
-                
-                const elements = await session.page.$$(selector);
-                
-                for (const element of elements) {
-                  const isVisible = await element.isVisible();
-                  const isEnabled = await element.isEnabled();
-                  const buttonText = await element.textContent();
-                  
-                  if (isVisible && isEnabled && buttonText?.includes('Prenota')) {
-                    // Scroll to element and ensure it's in viewport
-                    await element.scrollIntoViewIfNeeded();
-                    await session.page.waitForTimeout(500);
-                    
-                    await element.click();
-                    
-                    // Wait and check if navigation occurred
-                    await session.page.waitForTimeout(2000);
-                    const newUrl = session.page.url();
-                    
-                    if (newUrl !== currentUrl) {
-                      rateOptionClicked = true;
-                      logger.info(`Successfully clicked specific option "${selectedOption.name}" with dynamic selector: ${selector}`);
-                      break;
-                    } else {
-                      logger.warn(`Button clicked but no navigation with selector: ${selector}`);
-                    }
+                const text = (await handle.textContent() || '').toLowerCase();
+                const nameLower = (selectedOption.name || '').toLowerCase();
+                if (nameLower && text.includes(nameLower.substring(0, Math.min(15, nameLower.length)))) {
+                  matchedHandle = handle;
+                  break;
+                }
+              } catch {}
+            }
+
+            if (matchedHandle) {
+              const rateLocator = roomScope.locator('.RateWithOptions, .e1sl87534').filter({ has: { element: matchedHandle } }).first();
+              const bookBtn = rateLocator.locator(
+                'button:has-text("Prenota"):not(:has-text("Info")), .RoomOption_CTA:has-text("Prenota"), button.e16r10jm0:has-text("Prenota"), button:has(.CTA_Text:has-text("Prenota"))'
+              ).first();
+              if (await bookBtn.count() > 0) {
+                await bookBtn.scrollIntoViewIfNeeded();
+                await session.page.screenshot({ 
+                  path: `backend/logs/target-rate-${sessionId}-${optionId.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+                  fullPage: true
+                });
+                await bookBtn.click({ timeout: 5000 });
+                await session.page.waitForTimeout(1500);
+                const newUrl = session.page.url();
+                const successBySelectors = await Promise.race([
+                  session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
+                  session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
+                  session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
+                ]);
+                if (newUrl !== currentUrl || successBySelectors) {
+                  rateOptionClicked = true;
+                  logger.info('🎉 SUCCESS! Clicked rate-specific Prenota in scoped room (title match)');
+                } else {
+                  logger.warn('Clicked rate-specific Prenota (title match) but no navigation indicators detected');
+                }
+              } else {
+                logger.warn('No valid Prenota button inside targeted rate (title match)');
+              }
+            } else {
+              logger.warn('Could not find targeted rate container by title');
+            }
+          } catch (e) {
+            logger.debug(`Scoped rate click (title) failed: ${e.message}`);
+          }
+        }
+
+        // 4) Ultimo fallback: selettori generici ma sempre nello scope della stanza
+        if (!rateOptionClicked) {
+          logger.info('Falling back to generic Prenota selectors within room scope');
+          const simplePrenotaSelectors = [
+            'button:has-text("Prenota"):not(:has-text("Info"))',
+            '.RoomOption_CTA:has-text("Prenota")',
+            'button.e16r10jm0:has-text("Prenota")',
+            '[class*="CTA"]:has-text("Prenota")',
+            'button[class*="prenota"]',
+            'button[class*="Prenota"]'
+          ];
+
+          for (const selector of simplePrenotaSelectors) {
+            try {
+              logger.info(`Trying simple Prenota selector (scoped): ${selector}`);
+              const elements = await roomScope.$$(selector);
+
+              for (const element of elements) {
+                const isVisible = await element.isVisible();
+                const isEnabled = await element.isEnabled();
+                const buttonText = await element.textContent();
+                const lowerButtonText = (buttonText || '').toLowerCase();
+                const isValidPrenota = lowerButtonText.includes('prenota') && !lowerButtonText.includes('info');
+
+                if (isVisible && isEnabled && isValidPrenota) {
+                  await element.scrollIntoViewIfNeeded();
+                  await session.page.waitForTimeout(300);
+                  await element.click({ timeout: 5000 });
+                  await session.page.waitForTimeout(1500);
+                  const newUrl = session.page.url();
+                  const successBySelectors = await Promise.race([
+                    session.page.isVisible('.CustomerDataCollectionPage', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('input[name="name"], input[name="firstName"]', { timeout: 3000 }).catch(() => false),
+                    session.page.isVisible('.GuaranteeDataCollectionPage, .PaymentMethodsForm', { timeout: 3000 }).catch(() => false)
+                  ]);
+                  if (newUrl !== currentUrl || successBySelectors) {
+                    rateOptionClicked = true;
+                    logger.info(`🎉 SUCCESS! Clicked simple Prenota (scoped) using selector: ${selector}`);
+                    break;
                   }
                 }
-                
-                if (rateOptionClicked) break;
-              } catch (error) {
-                logger.debug(`Dynamic selector ${selector} failed: ${error.message}`);
-                continue;
               }
+              if (rateOptionClicked) break;
+            } catch (error) {
+              logger.debug(`Scoped simple Prenota selector ${selector} failed: ${error.message}`);
+              continue;
             }
-          } else {
-            logger.warn('Dynamic selector analysis failed:', dynamicSelector);
           }
-          
-          if (!rateOptionClicked) {
-            logger.warn(`Dynamic DOM analysis failed for option "${selectedOption.name}"`);
-          }
-        } else {
-          logger.warn(`Option ${optionId} not found in room booking options`);
         }
       }
-      
-      // Se non è stato possibile cliccare l'opzione specifica, fallisce l'operazione
-      if (!rateOptionClicked && optionId) {
-        logger.error(`Failed to click specific rate option ${optionId}. Operation aborted - no fallback to generic selectors.`);
-        
-        // Take screenshot for debugging
-        await session.page.screenshot({ 
-          path: `backend/logs/failed-option-selection-${sessionId}.png`,
-          fullPage: true
-        });
-        
-        return res.status(400).json({
-          error: 'Specific rate option selection failed',
-          message: `Could not select the requested rate option "${optionId}". The system will not fall back to generic options to ensure booking accuracy.`,
-          optionId: optionId
-        });
-      }
+    }
       
       // Solo se l'utente NON ha specificato un'opzione, usa il fallback generico
       if (!rateOptionClicked && !optionId) {
