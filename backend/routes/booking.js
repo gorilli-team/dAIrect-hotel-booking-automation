@@ -726,8 +726,9 @@ router.post('/start-search', async (req, res) => {
       throw new Error(`Failed to navigate to search page after 3 attempts: ${lastError?.message}`);
     }
     
-    // Handle cookie consent if present
+    // Handle cookie consent and overlays if present
     await aiService.handleCookieConsent(page);
+    await aiService.closeOverlays(page, { maxMs: 600 });
     
     // Wait for results to load
     logger.info('Waiting for availability results to load');
@@ -934,6 +935,8 @@ router.post('/select-room', async (req, res) => {
     const bookingOptionsVisible = await session.page.isVisible('.RateWithOptions, .e1sl87534', { timeout: 5000 }).catch(() => false);
     
     if (bookingOptionsVisible) {
+      // Ensure overlays are not blocking before interacting with rate options
+      await aiService.closeOverlays(session.page, { maxMs: 600 });
       logger.info('✅ Booking options page loaded - found rate options');
       
       let rateOptionClicked = false;
