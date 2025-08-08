@@ -708,24 +708,25 @@ Rispondi SOLO con un JSON in questo formato:
   }
 }
 
-// Function to wait for availability results to load
-async function waitForAvailabilityResults(page, maxWaitTime = 15000) {
-  logger.info('Waiting for availability results to load');
+// Function to wait for availability results to load - OPTIMIZED
+async function waitForAvailabilityResults(page, maxWaitTime = 8000) {
+  logger.info('Waiting for availability results to load (optimized)');
   
   const startTime = Date.now();
+  let consecutiveSuccesses = 0;
   
   while (Date.now() - startTime < maxWaitTime) {
     try {
-      // Multiple strategies to check if results are ready
+      // Fast parallel checks with shorter timeouts
       const checks = await Promise.allSettled([
         // Check for room cards with the selectors you provided
-        page.isVisible('.RoomCard, .RoomResultBlock, .ekc2wag12, .eio1k2u2', { timeout: 1000 }),
+        page.isVisible('.RoomCard, .RoomResultBlock, .ekc2wag12, .eio1k2u2', { timeout: 500 }),
         // Check for price elements
-        page.isVisible('.mainAmount, .eiup2eu1', { timeout: 1000 }),
+        page.isVisible('.mainAmount, .eiup2eu1', { timeout: 300 }),
         // Check for book buttons
-        page.isVisible('button:contains("Info e prenota"), button:contains("Prenota")', { timeout: 1000 }),
+        page.isVisible('button:contains("Info e prenota"), button:contains("Prenota")', { timeout: 300 }),
         // Check if loader is gone
-        page.isVisible('.QuarterRingLoader, .e47q4xm0, .ltr-jispw8, .e1v89k2u3', { timeout: 500 }).then(visible => !visible)
+        page.isVisible('.QuarterRingLoader, .e47q4xm0, .ltr-jispw8, .e1v89k2u3', { timeout: 200 }).then(visible => !visible)
       ]);
       
       const roomsVisible = checks[0].status === 'fulfilled' && checks[0].value;
@@ -735,22 +736,24 @@ async function waitForAvailabilityResults(page, maxWaitTime = 15000) {
       
       // If we have rooms AND (prices OR buttons), consider it ready
       if (roomsVisible && (pricesVisible || buttonsVisible)) {
-        logger.info('Availability results loaded successfully', {
-          roomsVisible,
-          pricesVisible,
-          buttonsVisible,
-          loaderGone
-        });
-        return { success: true, status: 'results' };
+        consecutiveSuccesses++;
+        // Require 2 consecutive successes to avoid false positives
+        if (consecutiveSuccesses >= 2) {
+          logger.info('Availability results loaded successfully (fast)', {
+            roomsVisible,
+            pricesVisible,
+            buttonsVisible,
+            loaderGone,
+            elapsed: Date.now() - startTime
+          });
+          return { success: true, status: 'results' };
+        }
+      } else {
+        consecutiveSuccesses = 0;
       }
       
-      // If loader is gone but no results yet, wait a bit more
-      if (loaderGone) {
-        logger.info('Loader gone, waiting for content...');
-      }
-      
-      // Wait a bit before next check
-      await page.waitForTimeout(1500);
+      // Much shorter wait between checks
+      await page.waitForTimeout(500);
       
     } catch (error) {
       logger.debug('Waiting for results...', { 
@@ -760,31 +763,31 @@ async function waitForAvailabilityResults(page, maxWaitTime = 15000) {
     }
   }
   
-  logger.warn('Timeout waiting for availability results, proceeding anyway');
+  logger.warn('Fast timeout waiting for availability results, proceeding anyway');
   // Even if timeout, return success to try to analyze whatever is on the page
   return { success: true, status: 'timeout_but_proceed' };
 }
 
-// Function to check and handle cookie consent
+// Function to check and handle cookie consent - OPTIMIZED
 async function handleCookieConsent(page) {
-  logger.info('Checking for cookie consent banners');
+  logger.info('Checking for cookie consent banners (fast)');
   
   try {
-    // Wait briefly for banner to appear
-    await page.waitForTimeout(2000);
+    // Much shorter wait for banner to appear
+    await page.waitForTimeout(800);
     
-    // Check if cookie banner is present
-    const bannerVisible = await page.isVisible(COOKIE_SELECTORS.cookieBanner, { timeout: 3000 });
+    // Check if cookie banner is present with shorter timeout
+    const bannerVisible = await page.isVisible(COOKIE_SELECTORS.cookieBanner, { timeout: 1500 });
     
     if (bannerVisible) {
       logger.info('Cookie consent banner detected, accepting cookies');
       
-      // Try to click accept button
-      const acceptClicked = await page.click(COOKIE_SELECTORS.cookieAcceptButton, { timeout: 5000 });
+      // Try to click accept button with shorter timeout
+      const acceptClicked = await page.click(COOKIE_SELECTORS.cookieAcceptButton, { timeout: 2000 });
       
       if (acceptClicked) {
         logger.info('Successfully accepted cookies');
-        await page.waitForTimeout(1000); // Wait for banner to disappear
+        await page.waitForTimeout(300); // Much shorter wait for banner to disappear
       } else {
         logger.warn('Could not click cookie accept button');
       }

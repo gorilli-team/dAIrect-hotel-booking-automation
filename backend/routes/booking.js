@@ -46,552 +46,255 @@ function buildDirectSearchUrl(searchParams) {
   return directUrl;
 }
 
-// Funzione per estrarre camere usando solo i selettori diretti (NO AI)
+// Funzione per estrarre camere usando solo i selettori diretti (NO AI) - OPTIMIZED
 async function extractRoomsWithSelectors(page) {
-  logger.info('Extracting rooms using direct CSS selectors');
+  logger.info('Extracting rooms using direct CSS selectors (optimized)');
   
   const rooms = [];
   
   try {
-    // Aspetta che ci siano delle camere sulla pagina - usa solo il container principale
-    await page.waitForSelector('.RoomResultBlock, .eio1k2u2', { timeout: 10000 });
+    // Shorter wait with fallback selectors
+    await page.waitForSelector('.RoomResultBlock, .eio1k2u2, .RoomCard', { timeout: 6000 });
     
-    // Trova tutte le sezioni delle camere (container principale, non i figli)
-    const roomCards = await page.locator('.RoomResultBlock, .eio1k2u2');
-    const roomCount = await roomCards.count();
-    
-    // Log per debugging
-    const debugInfo = await roomCards.evaluateAll(elements => {
-      return elements.map((el, index) => ({
-        index,
-        classes: el.className,
-        hasRoomCard: el.querySelector('.RoomCard') !== null,
-        hasPrice: el.querySelector('[class*="mainAmount"]') !== null
-      }));
-    });
-    logger.info('Room cards debug info:', debugInfo);
-    
-    logger.info(`Found ${roomCount} room cards on page`);
-    
-    for (let i = 0; i < roomCount; i++) {
-      const roomCard = roomCards.nth(i);
+    // Use parallel extraction approach
+    const extractionResult = await page.evaluate(() => {
+      const formatCurrencyIT = (amount) => {
+        try {
+          const n = typeof amount === 'number' ? amount : parseFloat(amount);
+          if (!isNaN(n)) {
+            const base = n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return `€ ${base}`;
+          }
+        } catch {}
+        return null;
+      };
       
-      try {
-        // Estrai titolo camera
-        const titleElement = roomCard.locator('.RoomCard h3, .ekc2wag9 h3, h3.Heading strong').first();
-        const title = await titleElement.textContent().catch(() => `Camera ${i + 1}`);
-        
-        // Estrai blocco prezzo completo (con sconto, tasse, notti, etc.)
-        let priceBlock = null;
-        let price = '99'; // Fallback numerico per compatibilità
-        
-        try {
-          // Cerca il blocco prezzo completo con il selettore principale
-          const priceBlockSelectors = [
-            'div[type="PRICES"].Prices.eo2ouhh3', // Selettore completo dal HTML fornito
-            '.Prices.eo2ouhh3', // Senza l'attributo type
-            'div[type="PRICES"]', // Solo con attributo type
-            '.Prices' // Generico
-          ];
-          
-          for (const selector of priceBlockSelectors) {
-            try {
-              const priceElement = roomCard.locator(selector).first();
-              const priceHtml = await priceElement.innerHTML().catch(() => null);
-              
-              if (priceHtml) {
-                // Estrai anche il testo per informazioni separate
-                const priceText = await priceElement.textContent().catch(() => null);
-                
-                priceBlock = {
-                  html: priceHtml,
-                  text: priceText ? priceText.trim() : null
-                };
-                
-                // Estrai prezzo numerico per compatibilità con il resto del sistema
-                const mainAmountElement = priceElement.locator('.mainAmount span').first();
-                const mainAmountText = await mainAmountElement.textContent().catch(() => null);
-                
-                if (mainAmountText) {
-                  // Pulisci il prezzo per ottenere valore numerico
-                  let cleanedPrice = mainAmountText.replace(/[^0-9,.]/g, '');
-                  
-                  // Gestisce formato italiano: 2.479,68
-                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
-                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
-                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
-                    cleanedPrice = cleanedPrice.replace(',', '.');
-                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
-                    const parts = cleanedPrice.split('.');
-                    if (parts.length === 2 && parts[1].length <= 2) {
-                      cleanedPrice = cleanedPrice;
-                    } else {
-                      cleanedPrice = cleanedPrice.replace(/\./g, '');
-                    }
-                  }
-                  
-                  const numericPrice = parseFloat(cleanedPrice);
-                  if (!isNaN(numericPrice) && numericPrice > 0) {
-                    price = Math.floor(numericPrice).toString();
-                  }
-                }
-                
-                logger.info(`Price block found with selector '${selector}': ${priceText}`);
-                break;
-              }
-            } catch (error) {
-              continue;
-            }
-          }
-        } catch (error) {
-          logger.warn('Failed to extract price block:', error.message);
+      const trySelector = (container, selectors) => {
+        for (const sel of selectors) {
+          try {
+            const el = container.querySelector(sel);
+            if (el) return el;
+          } catch {}
         }
-        
-        // Se non troviamo il blocco completo, fallback al metodo precedente
-        if (!priceBlock) {
-          logger.info('Price block not found, falling back to simple price extraction');
+        return null;
+      };
+      
+      const tryText = (container, selectors) => {
+        const el = trySelector(container, selectors);
+        return el ? el.textContent?.trim() : null;
+      };
+      
+      const extractPrice = (priceText) => {
+        if (!priceText) return '99';
+        let cleaned = priceText.replace(/[^0-9,.]/g, '');
+        if (cleaned.includes('.') && cleaned.includes(',')) {
+          cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+        } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+          cleaned = cleaned.replace(',', '.');
+        } else if (cleaned.includes('.') && !cleaned.includes(',')) {
+          const parts = cleaned.split('.');
+          if (parts.length === 2 && parts[1].length <= 2) {
+            cleaned = cleaned;
+          } else {
+            cleaned = cleaned.replace(/\./g, '');
+          }
+        }
+        const numericPrice = parseFloat(cleaned);
+        return !isNaN(numericPrice) && numericPrice > 0 ? Math.floor(numericPrice).toString() : '99';
+      };
+      
+      // Find all room containers at once
+      const roomContainers = document.querySelectorAll('.RoomResultBlock, .eio1k2u2');
+      const extractedRooms = [];
+      
+      roomContainers.forEach((roomCard, i) => {
+        try {
+          // Extract title - faster single selector approach
+          const title = tryText(roomCard, [
+            '.RoomCard h3 strong',
+            '.ekc2wag9 h3 strong', 
+            'h3.Heading strong',
+            'h3 strong',
+            'h3'
+          ]) || `Camera ${i + 1}`;
           
-          const priceSelectors = [
+          // Extract price - prioritize main amount
+          const priceText = tryText(roomCard, [
             '.Prices .mainAmount span',
-            '.eiup2eu1 span',
             '.mainAmount span',
-            '.mainAmount',
-            '[class*="mainAmount"]'
-          ];
+            '.eiup2eu1 span',
+            '[translate="no"] span'
+          ]) || '99';
+          const price = extractPrice(priceText);
           
-          let priceText = '0';
-          let priceFound = false;
-          
-          for (const selector of priceSelectors) {
-            try {
-              const priceElement = roomCard.locator(selector).first();
-              const elementText = await priceElement.textContent({ timeout: 1000 });
-              if (elementText && elementText.match(/\d/)) {
-                priceText = elementText;
-                priceFound = true;
-                logger.info(`Fallback price found with selector '${selector}': ${elementText}`);
-                break;
-              }
-            } catch (error) {
-              continue;
-            }
-          }
-          
-          if (priceFound) {
-            let cleanedPrice = priceText.replace(/[^0-9,.]/g, '');
-            if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
-              cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
-            } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
-              cleanedPrice = cleanedPrice.replace(',', '.');
-            }
-            
-            const numericPrice = parseFloat(cleanedPrice);
-            if (!isNaN(numericPrice) && numericPrice > 0) {
-              price = Math.floor(numericPrice).toString();
-            }
-          }
-        }
-        
-        // Estrai descrizione dal selettore specifico (solo quello corretto)
-        let description = 'Camera disponibile';
-        try {
-          const descElement = roomCard.locator('.ekc2wag7 .ekc2wag6').first();
-          const rawDescription = await descElement.textContent().catch(() => null);
-          
-          if (rawDescription && rawDescription.trim()) {
-            // Pulisci la descrizione da elementi indesiderati
-            description = rawDescription.trim()
-              .replace(/^Slide \d+ di \d+.*?ruler/g, '') // Rimuovi "Slide 1 di 8...ruler"
-              .replace(/^\d+ m².*?ruler/g, '') // Rimuovi "28 m²...ruler"
-              .replace(/chevron-left.*?chevron-right/g, '') // Rimuovi navigazione
-              .replace(/^\d+ \/ \d+/g, '') // Rimuovi "1 / 8"
-              .replace(/ruler\d+\s*m²/g, '') // Rimuovi "ruler45 m²"
-              .replace(/Max ospiti:.*?crib\d+/g, '') // Rimuovi info ospiti
-              .replace(/adult\d+/g, '') // Rimuovi "adult5"
-              .replace(/crib\d+/g, '') // Rimuovi "crib1"
-              .replace(/snow|volume|terrace|tree|help-circle|building|wifi/g, '') // Rimuovi icone
-              .replace(/Aria condizionata|Insonorizzazione|Balcone|Vista|Vista luogo di interesse|Vista città|Wi-Fi Free/g, '') // Rimuovi features
-              .replace(/Vedi di più/g, '') // Rimuovi "Vedi di più"
-              .replace(/Ne resta solo \d+|Ne restano solo \d+/g, '') // Rimuovi disponibilità
-              .replace(/A partire da.*?Info e prenota/g, '') // Rimuovi prezzo e bottone
-              .replace(/chevron-up.*?Offerta speciale/g, '') // Rimuovi offerta speciale
-              .replace(/tag/g, '') // Rimuovi "tag"
-              .replace(/\s+/g, ' ') // Normalizza spazi
-              .trim();
-              
-            if (description.length > 10) { // Solo se abbiamo una descrizione valida
-              logger.info(`Clean description extracted: ${description}`);
-            } else {
-              description = 'Camera disponibile';
-            }
-          }
-        } catch (error) {
-          logger.warn('Failed to extract description:', error.message);
-        }
-        
-        // Estrai blocco completo dimensioni + ospiti dal selettore .ekc2wag8
-        let roomInfoBlock = null;
-        try {
-          const infoBlockElement = roomCard.locator('.ekc2wag8.ltr-1f91znd.e3a2zab1').first();
-          const infoBlockHtml = await infoBlockElement.innerHTML().catch(() => null);
-          
-          if (infoBlockHtml) {
-            // Estrai anche il testo leggibile per informazioni separate
-            const infoBlockText = await infoBlockElement.textContent().catch(() => null);
-            
-            roomInfoBlock = {
-              html: infoBlockHtml,
-              text: infoBlockText ? infoBlockText.trim() : null
+          // Extract price block HTML (for detailed display)
+          let priceBlock = null;
+          const priceBlockEl = trySelector(roomCard, [
+            'div[type="PRICES"].Prices.eo2ouhh3',
+            '.Prices.eo2ouhh3',
+            '.Prices'
+          ]);
+          if (priceBlockEl) {
+            priceBlock = {
+              html: priceBlockEl.outerHTML,
+              text: priceBlockEl.textContent?.trim()
             };
-            
-            logger.info(`Found room info block: ${infoBlockText}`);
           }
-        } catch (error) {
-          logger.warn('Failed to extract room info block:', error.message);
-        }
-        
-        // Estrai caratteristiche dettagliate della camera (escludi dimensioni)
-        const detailedFeatures = [];
-        try {
-          // Trova tutti gli elementi RoomFeature nella sezione caratteristiche
-          const featureElements = roomCard.locator('.RoomFeature .ltr-zswzrr');
-          const featureCount = await featureElements.count();
           
-          for (let featIdx = 0; featIdx < featureCount; featIdx++) {
-            const featureEl = featureElements.nth(featIdx);
-            const featureText = await featureEl.textContent().catch(() => null);
-            
-            if (featureText && featureText.trim()) {
-              const cleanFeatureText = featureText.trim();
-              
-              // Escludi le dimensioni dalle features (già estratte in roomSize)
-              if (!cleanFeatureText.match(/^\d+\s*m²$/)) {
-                detailedFeatures.push(cleanFeatureText);
-              }
+          // Extract description with basic cleanup
+          let description = tryText(roomCard, [
+            '.ekc2wag7 .ekc2wag6',
+            '.RoomCard .Paragraph',
+            '.room-description'
+          ]) || 'Camera disponibile';
+          
+          // Basic description cleanup
+          if (description.length > 20) {
+            description = description
+              .replace(/^Slide \d+ di \d+.*?ruler/g, '')
+              .replace(/^\d+ m².*?ruler/g, '')
+              .replace(/chevron-left.*?chevron-right/g, '')
+              .replace(/Vedi di più/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+          }
+          if (description.length < 10) description = 'Camera disponibile';
+          
+          // Extract room info block
+          let roomInfoBlock = null;
+          const infoBlockEl = trySelector(roomCard, ['.ekc2wag8.ltr-1f91znd.e3a2zab1']);
+          if (infoBlockEl) {
+            roomInfoBlock = {
+              html: infoBlockEl.outerHTML,
+              text: infoBlockEl.textContent?.trim()
+            };
+          }
+          
+          // Extract basic features (simplified)
+          const features = [];
+          const featureElements = roomCard.querySelectorAll('.RoomFeature .ltr-zswzrr');
+          featureElements.forEach((featureEl) => {
+            const featureText = featureEl.textContent?.trim();
+            if (featureText && !featureText.match(/^\d+\s*m²$/)) {
+              features.push(featureText);
             }
-          }
+          });
           
-          logger.info(`Found ${detailedFeatures.length} detailed features (excluding room size):`, detailedFeatures);
-        } catch (error) {
-          logger.warn('Failed to extract detailed features:', error.message);
-        }
-        
-        // Estrai disponibilità limitata con più dettagli
-        let availabilityInfo = null;
-        try {
-          const availElement = roomCard.locator('.enongdq2, .enongdq1, .enongdq0');
-          
-          // Prova a ottenere il numero rimasto
-          const numberElement = roomCard.locator('.enongdq1');
-          const numberText = await numberElement.textContent().catch(() => null);
-          
-          // Prova a ottenere il testo descrittivo
-          const descElement = roomCard.locator('.enongdq0');
-          const descText = await descElement.textContent().catch(() => null);
-          
-          if (numberText || descText) {
+          // Extract availability info
+          let availabilityInfo = null;
+          const availText = tryText(roomCard, ['.enongdq2', '.enongdq0']);
+          const availNumber = tryText(roomCard, ['.enongdq1']);
+          if (availText || availNumber) {
             availabilityInfo = {
-              remaining: numberText ? parseInt(numberText) : null,
-              description: descText || null,
+              remaining: availNumber ? parseInt(availNumber) : null,
+              description: availText,
               isLimited: true
             };
-            logger.info(`Found availability info:`, availabilityInfo);
           }
-        } catch (error) {
-          // Info disponibilità non trovate
-        }
-        
-        // Estrai opzioni di prenotazione dal collapse (se espanso)
-        const bookingOptions = [];
-        try {
-          // Cerca il collapse delle opzioni
-          const collapseContainer = roomCard.locator('.roomOptionsCollapse, .ltr-dmxz30');
-          const hasCollapse = await collapseContainer.count() > 0;
           
-          if (hasCollapse) {
-            logger.info(`Found booking options collapse for room ${i + 1}`);
-            
-            // Estrai tutte le sezioni RateWithOptions
-            const rateOptions = collapseContainer.locator('.RateWithOptions, .e1sl87534');
-            const rateOptionsCount = await rateOptions.count();
-            
-            logger.info(`Found ${rateOptionsCount} rate options in collapse`);
-            
-            for (let rateIdx = 0; rateIdx < rateOptionsCount; rateIdx++) {
-              const rateOption = rateOptions.nth(rateIdx);
-              
-              try {
-                // Estrai nome/titolo della tariffa
-                const rateTitleElement = rateOption.locator('h4.e18qkw5q3 strong, h4 strong').first();
-                const rateTitle = await rateTitleElement.textContent().catch(() => `Tariffa ${rateIdx + 1}`);
-                
-                // Estrai descrizione della tariffa
-                const rateDescElement = rateOption.locator('p.e18qkw5q2, .Paragraph').first();
-                const rateDescription = await rateDescElement.textContent().catch(() => null);
-                
-                // Estrai prezzo della tariffa
-                let ratePrice = '0';
-                const ratePriceElement = rateOption.locator('.mainAmount, .eiup2eu2').first();
-                const ratePriceText = await ratePriceElement.textContent().catch(() => null);
-                
-                if (ratePriceText) {
-                  let cleanedPrice = ratePriceText.replace(/[^0-9,.]/g, '');
-                  // Gestisce formato italiano: 1.701 o 1.956,15
-                  if (cleanedPrice.includes('.') && cleanedPrice.includes(',')) {
-                    cleanedPrice = cleanedPrice.replace(/\./g, '').replace(',', '.');
-                  } else if (cleanedPrice.includes(',') && !cleanedPrice.includes('.')) {
-                    cleanedPrice = cleanedPrice.replace(',', '.');
-                  } else if (cleanedPrice.includes('.') && !cleanedPrice.includes(',')) {
-                    const parts = cleanedPrice.split('.');
-                    if (parts.length === 2 && parts[1].length <= 2) {
-                      // È un decimale: 123.45
-                      cleanedPrice = cleanedPrice;
-                    } else {
-                      // È un separatore delle migliaia: 1.701
-                      cleanedPrice = cleanedPrice.replace(/\./g, '');
-                    }
-                  }
-                  
-                  const numericPrice = parseFloat(cleanedPrice);
-                  if (!isNaN(numericPrice) && numericPrice > 0) {
-                    ratePrice = numericPrice.toString();
-                  }
-                }
-                
-                // Estrai info sconto se presente
-                let discountInfo = null;
-                const discountElement = rateOption.locator('.discount, .e1f8iu742').first();
-                const discountCount = await discountElement.count();
-                
-                if (discountCount > 0) {
-                  const discountPercent = await discountElement.locator('.percent, .ltr-dsm5ai').textContent().catch(() => null);
-                  const originalPrice = await discountElement.locator('.originalAmount, .ltr-4pyi7h').textContent().catch(() => null);
-                  
-                  if (discountPercent || originalPrice) {
-                    discountInfo = {
-                      percent: discountPercent?.trim(),
-                      originalPrice: originalPrice?.trim()
-                    };
-                  }
-                }
-                
-                // Estrai politica di cancellazione
-                let cancellationPolicy = null;
-                const cancelPolicyElement = rateOption.locator('.Rate__CancellationPolicy, .e18qkw5q0').first();
-                const cancelPolicyText = await cancelPolicyElement.textContent().catch(() => null);
-                
-                if (cancelPolicyText) {
-                  const isRefundable = !cancelPolicyText.toLowerCase().includes('non rimborsabile');
-                  cancellationPolicy = {
-                    text: cancelPolicyText.trim(),
-                    refundable: isRefundable
-                  };
-                }
-                
-                // Estrai tipo di pasto (Camera e Colazione, etc.)
-                let mealPlan = null;
-                const mealPlanElement = rateOption.locator('.e16r10jm5, p b').first();
-                const mealPlanText = await mealPlanElement.textContent().catch(() => null);
-                
-                if (mealPlanText) {
-                  mealPlan = mealPlanText.trim();
-                }
-                
-                // Trova bottone "Prenota" per questa opzione
-                const bookButtonElement = rateOption.locator('.RoomOption_CTA, .e16r10jm0, button:has-text("Prenota")').first();
-                const hasBookButton = await bookButtonElement.count() > 0;
-                
-                let bookSelector = null;
-                if (hasBookButton) {
-                  // Genera selettori multipli più robusti per questa opzione specifica
-                  const roomIndex = i + 1;
-                  const optionIndex = rateIdx + 1;
-                  
-                  // Selettori ordinati dal più specifico al più generale
-                  const selectors = [
-                    `.RoomResultBlock:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) .RoomOption_CTA.e16r10jm0`,
-                    `.RoomResultBlock:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) button.RoomOption_CTA`,
-                    `.RoomResultBlock:nth-child(${roomIndex}) .e1sl87534:nth-child(${optionIndex}) .e16r10jm0`,
-                    `.RoomCard:nth-child(${roomIndex}) .RateWithOptions:nth-child(${optionIndex}) button:has-text("Prenota")`,
-                    `[data-testid="room-${roomIndex}-option-${optionIndex}-book"]` // Fallback con data attribute
-                  ];
-                  
-                  bookSelector = selectors.join(', ');
-                }
-                
-                // Estrai badge "Offerta speciale" se presente
-                let specialOffer = false;
-                const specialOfferElement = rateOption.locator('.Badge:has-text("Offerta speciale"), .e1jssjhy1').first();
-                const hasSpecialOffer = await specialOfferElement.count() > 0;
-                if (hasSpecialOffer) {
-                  specialOffer = true;
-                }
-                
-                const priceNumber = parseFloat(ratePrice);
-                const bookingOption = {
-                  id: `rate-${i + 1}-${rateIdx + 1}`,
-                  name: rateTitle.trim(),
-                  description: rateDescription ? rateDescription.trim().substring(0, 500) : null,
-                  price: priceNumber,
-                  formattedPrice: formatCurrencyIT(priceNumber),
-                  currency: 'EUR',
-                  mealPlan: mealPlan,
-                  cancellationPolicy: cancellationPolicy,
-                  discountInfo: discountInfo,
-                  specialOffer: specialOffer,
-                  bookSelector: bookSelector,
-                  available: hasBookButton
-                };
-                
-                bookingOptions.push(bookingOption);
-                logger.info(`Extracted booking option: ${bookingOption.name} - €${bookingOption.price}`);
-                
-              } catch (error) {
-                logger.warn(`Failed to extract rate option ${rateIdx + 1} for room ${i + 1}:`, error.message);
-              }
-            }
-          } else {
-            logger.info(`No booking options collapse found for room ${i + 1}`);
-          }
-        } catch (error) {
-          logger.warn(`Failed to extract booking options for room ${i + 1}:`, error.message);
-        }
-        
-        // Trova bottone di prenotazione principale
-        const bookButtons = roomCard.locator('.RoomCard_CTA, .ekc2wag2, button:has-text("Info e prenota"), button:has-text("Prenota")');
-        const bookButtonCount = await bookButtons.count();
-        
-        let mainBookSelector = null;
-        if (bookButtonCount > 0) {
-          // Genera un selector unico per questo bottone
-          mainBookSelector = `.RoomCard:nth-child(${i + 1}) .RoomCard_CTA, .RoomResultBlock:nth-child(${i + 1}) button`;
-        }
-        
-        // Estrai immagini dal carousel
-        const images = [];
-        try {
-          // Selettori per le immagini nel carousel SpringImageCarousel
-          const imageSelectors = [
-            '.SpringImageCarousel img[src]',
-            '.e1sp74u31[src]', // Classe specifica delle immagini
-            '.SpringImageCarousel__Slide img[src]',
-            '.e1sp74u35[style*="background-image"]', // Background images
-            '[class*="SpringImageCarousel"] img[src]'
-          ];
-          
-          for (const selector of imageSelectors) {
+          // Simple booking options extraction (no complex rate analysis for speed)
+          const bookingOptions = [];
+          const rateOptions = roomCard.querySelectorAll('.RateWithOptions, .e1sl87534');
+          rateOptions.forEach((rateEl, rateIdx) => {
             try {
-              const imageElements = roomCard.locator(selector);
-              const imageCount = await imageElements.count();
+              const rateName = tryText(rateEl, ['h4.e18qkw5q3 strong', 'h4 strong']) || `Tariffa ${rateIdx + 1}`;
+              const ratePriceText = tryText(rateEl, ['.mainAmount', '.eiup2eu2']);
+              const ratePrice = parseFloat(extractPrice(ratePriceText));
               
-              for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
-                const imgElement = imageElements.nth(imgIdx);
-                
-                // Prova a ottenere l'URL dalla src
-                let imageUrl = await imgElement.getAttribute('src').catch(() => null);
-                
-                // Se non c'è src, prova con background-image
-                if (!imageUrl) {
-                  const style = await imgElement.getAttribute('style').catch(() => null);
-                  if (style && style.includes('background-image')) {
-                    const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
-                    if (urlMatch) {
-                      imageUrl = urlMatch[1];
-                    }
-                  }
-                }
-                
-                // Aggiungi immagine se valida e non duplicata
-                if (imageUrl && imageUrl.startsWith('http') && !images.includes(imageUrl)) {
-                  images.push(imageUrl);
-                  logger.info(`Found room image: ${imageUrl}`);
-                }
+              let bookSelector = null;
+              const bookBtn = trySelector(rateEl, [
+                'button:has-text("Prenota"):not(:has-text("Info"))',
+                '.RoomOption_CTA',
+                'button.e16r10jm0'
+              ]);
+              if (bookBtn) {
+                bookSelector = `.RoomResultBlock:nth-child(${i + 1}) .RateWithOptions:nth-child(${rateIdx + 1}) button:has-text("Prenota")`;
               }
               
-              if (images.length > 0) break; // Se abbiamo trovato immagini, non continuare con altri selettori
-            } catch (error) {
-              // Continua con il prossimo selettore
-            }
+              bookingOptions.push({
+                id: `rate-${i + 1}-${rateIdx + 1}`,
+                name: rateName,
+                price: ratePrice,
+                formattedPrice: formatCurrencyIT(ratePrice),
+                bookSelector: bookSelector,
+                available: !!bookBtn
+              });
+            } catch {}
+          });
+          
+          // Extract main book selector
+          let mainBookSelector = null;
+          const mainBookBtn = trySelector(roomCard, [
+            '.RoomCard_CTA',
+            '.ekc2wag2',
+            'button:has-text("Info e prenota")',
+            'button:has-text("Prenota")'
+          ]);
+          if (mainBookBtn) {
+            mainBookSelector = `.RoomCard:nth-child(${i + 1}) .RoomCard_CTA, .RoomResultBlock:nth-child(${i + 1}) button`;
           }
           
-          // Fallback: cerca anche nei div con background-image
-          if (images.length === 0) {
-            const bgElements = roomCard.locator('[style*="background-image"]');
-            const bgCount = await bgElements.count();
-            
-            for (let bgIdx = 0; bgIdx < bgCount; bgIdx++) {
-              const bgElement = bgElements.nth(bgIdx);
-              const style = await bgElement.getAttribute('style').catch(() => null);
-              
-              if (style && style.includes('background-image')) {
-                const urlMatch = style.match(/url\(["']?([^"')]+)["']?\)/);
-                if (urlMatch && urlMatch[1].startsWith('http') && !images.includes(urlMatch[1])) {
-                  images.push(urlMatch[1]);
-                  logger.info(`Found room background image: ${urlMatch[1]}`);
-                }
-              }
+          // Extract images (simplified)
+          const images = [];
+          const imgElements = roomCard.querySelectorAll('.SpringImageCarousel img[src], .e1sp74u31[src]');
+          imgElements.forEach(img => {
+            const src = img.getAttribute('src');
+            if (src && src.startsWith('http') && !images.includes(src)) {
+              images.push(src);
             }
-          }
+          });
           
+          const roomPriceNumber = parseInt(price) || 99;
+          const room = {
+            id: `room-${i + 1}`,
+            name: title.trim(),
+            price: roomPriceNumber,
+            formattedPrice: formatCurrencyIT(roomPriceNumber),
+            currency: 'EUR',
+            description: description.substring(0, 200),
+            features: features.length > 0 ? features : ['WiFi gratuito', 'Aria condizionata'],
+            roomInfoBlock: roomInfoBlock,
+            priceBlock: priceBlock,
+            mainBookSelector,
+            available: true,
+            limitedAvailability: tryText(roomCard, ['.enongdq2']),
+            availabilityInfo: availabilityInfo,
+            images: images,
+            bookingOptions: bookingOptions
+          };
+          
+          extractedRooms.push(room);
         } catch (error) {
-          logger.warn(`Failed to extract images for room ${i + 1}:`, error.message);
+          console.warn(`Failed to extract room ${i + 1}:`, error.message);
         }
-        
-        // Verifica disponibilità limitata
-        const limitedAvailElement = roomCard.locator('.enongdq2, :has-text("Ne resta solo"), :has-text("Ne restano solo")');
-        const limitedAvailText = await limitedAvailElement.textContent().catch(() => null);
-        
-        const roomPriceNumber = parseInt(price) || 99;
-        const room = {
-          id: `room-${i + 1}`,
-          name: title.trim(),
-          price: roomPriceNumber,
-          formattedPrice: formatCurrencyIT(roomPriceNumber),
-          currency: 'EUR',
-          description: description.trim().substring(0, 200), // Increased length for longer descriptions
-          features: detailedFeatures.length > 0 ? detailedFeatures : ['WiFi gratuito', 'Aria condizionata'], // Use extracted features
-          roomInfoBlock: roomInfoBlock, // Blocco HTML completo con dimensioni + ospiti
-          priceBlock: priceBlock, // Blocco HTML completo del prezzo (con sconto, tasse, notti, etc.)
-          mainBookSelector,
-          available: true,
-          limitedAvailability: limitedAvailText,
-          availabilityInfo: availabilityInfo, // Detailed availability info
-          images: images, // Array di URL delle immagini
-          bookingOptions: bookingOptions // Opzioni di prenotazione estratte dal collapse
-        };
-        
-        // Check for duplicates before adding (simple deduplication by name)
-        const existingRoom = rooms.find(existingRoom => 
-          existingRoom.name.toLowerCase().trim() === room.name.toLowerCase().trim()
-        );
-        
-        if (!existingRoom) {
-          rooms.push(room);
-          logger.info(`Extracted room: ${room.name} - €${room.price}`);
-        } else {
-          logger.info(`Skipped duplicate room: ${room.name} (already found with price €${existingRoom.price})`);
-        }
-        
-      } catch (error) {
-        logger.warn(`Failed to extract data for room card ${i + 1}:`, error.message);
-      }
-    }
+      });
+      
+      return {
+        success: true,
+        rooms: extractedRooms,
+        totalRooms: extractedRooms.length
+      };
+    });
     
-    // Final deduplication pass (just in case)
-    const uniqueRooms = rooms.filter((room, index, self) => 
-      index === self.findIndex(r => r.name.toLowerCase().trim() === room.name.toLowerCase().trim())
-    );
-    
-    if (uniqueRooms.length !== rooms.length) {
-      logger.info(`Removed ${rooms.length - uniqueRooms.length} duplicate rooms`);
-    }
+    logger.info(`Extracted ${extractionResult.rooms.length} rooms using optimized parallel extraction`);
     
     return {
       success: true,
-      rooms: uniqueRooms,
-      totalRooms: uniqueRooms.length,
-      message: `Found ${uniqueRooms.length} unique rooms using direct selectors`
+      rooms: extractionResult.rooms,
+      totalRooms: extractionResult.rooms.length,
+      message: `Found ${extractionResult.rooms.length} unique rooms using direct selectors (optimized)`
     };
+    
+  } catch (error) {
+    logger.error('Failed to extract rooms with selectors:', error);
+    return {
+      success: false,
+      rooms: [],
+      totalRooms: 0,
+      message: 'No rooms found with direct selectors'
+    };
+  }
+}
     
   } catch (error) {
     logger.error('Failed to extract rooms with selectors:', error);
@@ -724,7 +427,7 @@ router.post('/start-search', async (req, res) => {
         
         await page.goto(directUrl, { 
           waitUntil: 'domcontentloaded',
-          timeout: 30000 // Increased timeout to 30 seconds
+          timeout: 20000 // Optimized timeout to 20 seconds
         });
         
         navigationSuccess = true;
@@ -736,8 +439,8 @@ router.post('/start-search', async (req, res) => {
         logger.warn(`Navigation attempt ${attempt} failed:`, error.message);
         
         if (attempt < 3) {
-          logger.info(`Waiting 2 seconds before retry...`);
-          await page.waitForTimeout(2000);
+          logger.info(`Waiting 1 second before retry...`);
+          await page.waitForTimeout(1000);
         }
       }
     }
@@ -747,9 +450,9 @@ router.post('/start-search', async (req, res) => {
       throw new Error(`Failed to navigate to search page after 3 attempts: ${lastError?.message}`);
     }
     
-    // Handle cookie consent and overlays if present
+    // Handle cookie consent and overlays if present - optimized
     await aiService.handleCookieConsent(page);
-    await aiService.closeOverlays(page, { maxMs: 600 });
+    await aiService.closeOverlays(page, { maxMs: 400 });
     
     // Wait for results to load
     logger.info('Waiting for availability results to load');
