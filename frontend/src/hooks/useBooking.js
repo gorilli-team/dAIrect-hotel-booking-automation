@@ -89,8 +89,25 @@ export const useBooking = () => {
       const response = await bookingService.selectRoom(state.sessionId, roomId, optionId)
       const room = state.availableRooms.find(r => r.id === roomId)
 
+      // After selecting the room, try to fetch the personal data summary (ReservationSummary + Cart)
+      let summaryHtml = null
+      try {
+        const summary = await bookingService.getPersonalDataSummary(state.sessionId)
+        summaryHtml = {
+          reservationSummaryHtml: summary.reservationSummaryHtml || null,
+          cartHtml: summary.cartHtml || null
+        }
+        // Also attach structured fields
+        var summaryStructured = summary.structured || null
+      } catch (e) {
+        // Non-blocking: continue without summary
+      }
+
+      // Attach summaryHtml and structured onto the selected room for rendering in PersonalDataForm
+      const enrichedRoom = { ...room, summaryHtml, summaryStructured }
+
       updateState({
-        selectedRoom: room,
+        selectedRoom: enrichedRoom,
         currentStep: 'personal-data', // First step: personal data
         loading: null
       })

@@ -1845,6 +1845,218 @@ router.post('/complete-booking', async (req, res) => {
 });
 
 // POST /api/booking/analyze-current-page - Analyze what page we're currently on
+// GET /api/booking/personal-data-summary/:sessionId - Extract ReservationSummary and Cart HTML on personal data page
+router.get('/personal-data-summary/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = sessions.get(sessionId);
+
+    if (!session || !session.page) {
+      return res.status(404).json({
+        error: 'Session not found or page not available'
+      });
+    }
+
+    // Best effort: this is expected to be called on or after the personal-data step
+    logger.info('Extracting personal data summary sections', { sessionId, currentStep: session.currentStep });
+
+    // Attempt to ensure we are not blocked by overlays
+    try {
+      await aiService.closeOverlays(session.page, { maxMs: 500 });
+    } catch {}
+
+    // Evaluate DOM to extract HTML fragments
+    const result = await session.page.evaluate(() => {
+      const tryEl = (selectors) => {
+        for (const sel of selectors) {
+          try {
+            const el = document.querySelector(sel);
+            if (el) return el;
+          } catch {}
+        }
+        return null;
+      };
+      const tryHTML = (selectors) => {
+        const el = tryEl(selectors);
+        return el ? el.outerHTML : null;
+      };
+
+      const reservationSummarySelectors = [
+        '.ReservationSummary',
+        '.e1dfdjmq10',
+        '[class*="ReservationSummary"]'
+      ];
+
+      const cartSelectors = [
+        '.Cart',
+        '.e1kagkvk5',
+        '[class*="Cart"]'
+      ];
+
+      const reservationSummaryEl = tryEl(reservationSummarySelectors);
+      const cartEl = tryEl(cartSelectors);
+
+      const reservationSummaryHtml = reservationSummaryEl ? reservationSummaryEl.outerHTML : null;
+      const cartHtml = cartEl ? cartEl.outerHTML : null;
+
+      const getText = (el, selectors) => {
+        if (!el) return null;
+        for (const sel of selectors) {
+          try {
+            const n = el.querySelector(sel);
+            if (n && n.textContent) return n.textContent.trim();
+          } catch {}
+        }
+        return null;
+      };
+      const getNumberFromPrice = (txt) => {
+        if (!txt) return null;
+        try {
+          let cleaned = (txt + '').replace(/[^0-9.,]/g, '');
+          if (cleaned.includes('.') && cleaned.includes(',')) cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+          else if (cleaned.includes(',') && !cleaned.includes('.')) cleaned = cleaned.replace(',', '.');
+          else if (cleaned.split('.').length > 2) cleaned = cleaned.replace(/\./g, '');
+          const num = parseFloat(cleaned);
+          return isNaN(num) ? null : num;
+        } catch { return null; }
+      };
+
+      // Parse ReservationSummary dates, nights, guests
+      let checkin = null;
+      let checkout = null;
+      let nights = null;
+      let guests = null;
+      if (reservationSummaryEl) {
+        try {
+          // Left date (check-in)
+          const left = reservationSummaryEl.querySelector('.e1dfdjmq8');
+          if (left) {
+            const dayName = getText(left, ['.e1dfdjmq1']);
+            const dayNum = getText(left, ['.e1dfdjmq6 b']);
+            const monthYear = getText(left, ['.e1dfdjmq5 b']);
+            if (dayNum && monthYear) checkin = `${dayName ? dayName + ' ' : ''}${dayNum} ${monthYear}`;
+          }
+          // Right date (checkout) - second occurrence
+          const rightBlocks = reservationSummaryEl.querySelectorAll('.e1dfdjmq8');
+          if (rightBlocks && rightBlocks.length >= 2) {
+            const right = rightBlocks[1];
+            const dayName = getText(right, ['.e1dfdjmq1']);
+            const dayNum = getText(right, ['.e1dfdjmq6 b']);
+            const monthYear = getText(right, ['.e1dfdjmq5 b']);
+            if (dayNum && monthYear) checkout = `${dayName ? dayName + ' ' : ''}${dayNum} ${monthYear}`;
+          }
+          nights = getText(reservationSummaryEl, ['.IconAndText__Text', '.IconAndText .en0r4hc1']);
+          guests = getText(reservationSummaryEl, ['.IconAndText__Text', '.IconAndText .en0r4hc1:nth-of-type(2)']) || null;
+        } catch {}
+      }
+
+      // Parse Cart: room name, rate name, meal plan, refundability, prices
+      let roomName = null;
+      let occupants = null;
+      let rateName = null;
+      let mealPlan = null;
+      let refundability = null;
+      let totalAmountFormatted = null;
+      let totalAmount = null;
+      let taxesIncluded = null;
+      let taxesAmountFormatted = null;
+      const mandatoryServices = [];
+
+      if (cartEl) {
+        try {
+          roomName = getText(cartEl, ['.Cart__Room__Name .CTA_Text', '.Cart__Room__Name', '.e1m2olwc1', '.e1m2olwc2 button .CTA_Text']);
+          occupants = getText(cartEl, ['.e1m2olwc0']);
+
+          // Rate and meal plan
+          const rateLine = cartEl.querySelector('.e13o920w6 .e13o920w5, .e13o920w6 .e13o920w5 + .e13o920w6, .e13o920w6');
+          if (rateLine) {
+            const rateBtn = rateLine.querySelector('.Cart__Room__Rate');
+            const mealBtn = rateLine.querySelector('.Cart__Room__MealPlan');
+            rateName = rateBtn?.textContent?.trim() || null;
+            mealPlan = mealBtn?.textContent?.trim() || null;
+          }
+          const refundEl = cartEl.querySelector('.e13o920w4');
+          refundability = refundEl?.textContent?.trim() || null; // e.g., "Non rimborsabile"
+
+          // Total price block
+          const totalBlock = cartEl.querySelector('.Cart__Totals, .e1risg603');
+          if (totalBlock) {
+            const mainAmount = totalBlock.querySelector('.mainAmount span');
+            if (mainAmount) {
+              totalAmountFormatted = mainAmount.textContent?.trim() || null;
+              totalAmount = getNumberFromPrice(totalAmountFormatted);
+            }
+            const incTaxes = totalBlock.querySelector('.e1rm81ho1, .discount');
+            if (incTaxes) {
+              const text = incTaxes.textContent?.toLowerCase() || '';
+              taxesIncluded = text.includes('tasse incluse') || null;
+              const taxAmount = totalBlock.querySelector('.e1rm81ho0');
+              taxesAmountFormatted = taxAmount?.textContent?.trim() || null;
+            }
+          }
+
+          // Mandatory services list
+          const services = cartEl.querySelectorAll('.Cart__MandatoryServicesList .ltr-199jhfg, .Cart__MandatoryServicesList .CartServiceItem, .Cart__MandatoryServicesList .e3fnw6f0');
+          if (services && services.length) {
+            services.forEach(wrapper => {
+              try {
+                const name = wrapper.textContent?.trim();
+                const priceNode = wrapper.parentElement?.querySelector('.Prices .mainAmount span') || wrapper.querySelector('.Prices .mainAmount span');
+                const priceFormatted = priceNode?.textContent?.trim() || null;
+                mandatoryServices.push({ name, priceFormatted, price: getNumberFromPrice(priceFormatted) });
+              } catch {}
+            });
+          }
+        } catch {}
+      }
+
+      return {
+        reservationSummaryHtml,
+        cartHtml,
+        reservationSummaryText: reservationSummaryHtml ? reservationSummaryEl.textContent?.trim() : null,
+        cartText: cartHtml ? cartEl.textContent?.trim() : null,
+        structured: {
+          checkin,
+          checkout,
+          nights,
+          guests,
+          roomName,
+          occupants,
+          rateName,
+          mealPlan,
+          refundability,
+          totalAmountFormatted,
+          totalAmount,
+          taxesIncluded,
+          taxesAmountFormatted,
+          mandatoryServices
+        }
+      };
+    });
+
+    // Screenshot for debugging
+    try {
+      await session.page.screenshot({ path: `backend/logs/personal-data-summary-${sessionId}.png`, fullPage: true });
+    } catch {}
+
+    res.json({
+      success: true,
+      sessionId,
+      currentStep: session.currentStep,
+      reservationSummaryHtml: result.reservationSummaryHtml,
+      cartHtml: result.cartHtml,
+      reservationSummaryText: result.reservationSummaryText,
+      cartText: result.cartText
+    });
+  } catch (error) {
+    logger.error('Error extracting personal data summary:', error);
+    res.status(500).json({
+      error: 'Failed to extract personal data summary',
+      message: error.message
+    });
+  }
+});
+
 router.post('/analyze-current-page', async (req, res) => {
   logger.info('Analyze current page endpoint called');
   

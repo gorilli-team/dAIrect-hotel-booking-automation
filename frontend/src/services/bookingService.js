@@ -141,6 +141,21 @@ export const bookingService = {
   },
 
   /**
+   * Get ReservationSummary and Cart HTML from the original site once on personal data page
+   * @param {string} sessionId
+   * @returns {Promise<{reservationSummaryHtml?: string, cartHtml?: string}>}
+   */
+  async getPersonalDataSummary(sessionId) {
+    try {
+      const response = await api.get(`/personal-data-summary/${sessionId}`)
+      return response
+    } catch (error) {
+      console.error('Error getting personal data summary:', error)
+      throw error
+    }
+  },
+
+  /**
    * Complete booking with payment data
    * @param {string} sessionId - Session identifier
    * @param {Object} bookingData - Complete booking data including payment
