@@ -1,9 +1,31 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Search } from 'lucide-react'
+import { Calendar, Users, Search, Building, MapPin } from 'lucide-react'
 import moment from 'moment'
+
+// Available hotels configuration
+const AVAILABLE_HOTELS = [
+  {
+    id: 'palazzo-vitturi',
+    name: 'Palazzo Vitturi',
+    location: 'Venezia',
+    emoji: '🏛️',
+    baseUrl: 'https://palazzovitturi.simplebooking.it',
+    description: 'Elegante palazzo storico nel cuore di Venezia'
+  },
+  {
+    id: 'castello-san-marco',
+    name: 'Hotel Castello San Marco',
+    location: 'Venezia',
+    emoji: '🏰',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/10118',
+    description: 'Lussuoso hotel castello con vista panoramica'
+  },
+  // Add more hotels here as needed
+]
 
 const SearchForm = ({ onSearch, loading, initialData }) => {
   const [formData, setFormData] = useState({
+    selectedHotel: 'palazzo-vitturi', // Default hotel
     checkinDate: '',
     checkoutDate: '',
     adults: 2,
@@ -66,7 +88,16 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
     e.preventDefault()
     
     if (validateForm() && !loading) {
-      onSearch(formData)
+      // Find selected hotel details
+      const selectedHotelData = AVAILABLE_HOTELS.find(hotel => hotel.id === formData.selectedHotel)
+      
+      // Include hotel information in the search data
+      const searchDataWithHotel = {
+        ...formData,
+        hotel: selectedHotelData
+      }
+      
+      onSearch(searchDataWithHotel)
     }
   }
 
@@ -94,18 +125,56 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
     return 0
   }
 
+  // Get selected hotel details
+  const selectedHotel = AVAILABLE_HOTELS.find(hotel => hotel.id === formData.selectedHotel)
+
   return (
     <div className="card">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          🏛️ Palazzo Vitturi - Venezia
-        </h2>
-        <p className="text-gray-600">
-          Automazione SimpleBooking avanzata
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          SimpleBooking Automation
+        </h1>
+        <p className="text-gray-600 mb-6">
+          Sistema avanzato di prenotazione automatizzata
         </p>
+        
+        {/* Selected Hotel Display */}
+        {selectedHotel && (
+          <div className="inline-flex items-center bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-3 mb-2">
+            <span className="text-2xl mr-3">{selectedHotel.emoji}</span>
+            <div className="text-left">
+              <div className="font-semibold text-gray-900">{selectedHotel.name}</div>
+              <div className="text-sm text-gray-600 flex items-center">
+                <MapPin className="w-3 h-3 mr-1" />
+                {selectedHotel.location}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Hotel Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <Building className="inline h-4 w-4 mr-1" />
+            Seleziona Hotel
+          </label>
+          <select
+            className="input-field"
+            value={formData.selectedHotel}
+            onChange={(e) => handleChange('selectedHotel', e.target.value)}
+          >
+            {AVAILABLE_HOTELS.map(hotel => (
+              <option key={hotel.id} value={hotel.id}>
+                {hotel.emoji} {hotel.name} - {hotel.location}
+              </option>
+            ))}
+          </select>
+          {selectedHotel && (
+            <p className="text-xs text-gray-500 mt-1">{selectedHotel.description}</p>
+          )}
+        </div>
         {/* Date Section */}
         <div className="grid md:grid-cols-2 gap-4">
           <div>

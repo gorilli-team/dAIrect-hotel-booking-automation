@@ -19,7 +19,19 @@ function formatCurrencyIT(amount) {
 
 // Funzione per costruire URL diretto SimpleBooking
 function buildDirectSearchUrl(searchParams) {
-  const baseUrl = process.env.TARGET_HOTEL_URL || 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR';
+  // Use hotel baseUrl if provided, otherwise fallback to environment variable
+  let baseUrl;
+  if (searchParams.hotel && searchParams.hotel.baseUrl) {
+    baseUrl = searchParams.hotel.baseUrl;
+    // Ensure the baseUrl has the proper query string format
+    if (!baseUrl.includes('?')) {
+      baseUrl += '?lang=IT&cur=EUR';
+    } else if (!baseUrl.includes('lang=') || !baseUrl.includes('cur=')) {
+      baseUrl += '&lang=IT&cur=EUR';
+    }
+  } else {
+    baseUrl = process.env.TARGET_HOTEL_URL || 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR';
+  }
   
   // Costruisce parametri date
   const dateParams = `&in=${searchParams.checkinDate}&out=${searchParams.checkoutDate}`;
@@ -602,7 +614,15 @@ const searchSchema = Joi.object({
   checkinDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
   checkoutDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
   adults: Joi.number().integer().min(1).max(6).required(),
-  children: Joi.number().integer().min(0).max(4).default(0)
+  children: Joi.number().integer().min(0).max(4).default(0),
+  hotel: Joi.object({
+    id: Joi.string().required(),
+    name: Joi.string().required(),
+    baseUrl: Joi.string().uri().required(),
+    location: Joi.string().optional(),
+    emoji: Joi.string().optional(),
+    description: Joi.string().optional()
+  }).optional()
 });
 
 const personalDataSchema = Joi.object({
@@ -632,14 +652,15 @@ router.post('/start-search', async (req, res) => {
       });
     }
 
-    const { checkinDate, checkoutDate, adults, children } = value;
+    const { checkinDate, checkoutDate, adults, children, hotel } = value;
     const sessionId = uuidv4();
 
     logger.info(`Starting booking search for session ${sessionId}`, {
       checkinDate,
       checkoutDate,
       adults,
-      children
+      children,
+      hotel: hotel?.name || 'default'
     });
 
     // Initialize Playwright session with new browser instance
@@ -690,8 +711,8 @@ router.post('/start-search', async (req, res) => {
     });
 
     // Costruisce URL diretto con parametri di ricerca
-    const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children });
-    logger.info('Using direct URL for search', { directUrl });
+    const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children, hotel });
+    logger.info('Using direct URL for search', { directUrl, hotel: hotel?.name || 'default' });
 
     // Navigate directly to search results page with retry logic
     let navigationSuccess = false;
