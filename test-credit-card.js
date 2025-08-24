@@ -14,6 +14,8 @@ async function testCreditCardSelection() {
     
     // Naviga direttamente alla pagina di pagamento di SimpleBooking
     console.log('Navigating to SimpleBooking payment page...');
+    // Palazzo Vitturi: https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR
+    // Terme dei Papi: https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR
     await page.goto('https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR');
     
     // Simula un flusso di booking fino alla pagina di pagamento

@@ -4,7 +4,7 @@ Un sistema completo per l'automazione delle prenotazioni hotel utilizzando **Rea
 
 ## 🎯 Obiettivo
 
-Automatizzare completamente il processo di prenotazione dell'hotel **Palazzo Vitturi** a Venezia su **SimpleBooking** tramite:
+Automatizzare completamente il processo di prenotazione hotel su **SimpleBooking** tramite:
 - Frontend React moderno stile Booking.com
 - Backend Node.js con automazione browser avanzata
 - Playwright per l'interazione automatica intelligente con SimpleBooking
@@ -119,6 +119,36 @@ npm run dev:backend
 
 # Terminal 2 - Frontend  
 npm run dev:frontend
+```
+
+## 🏨 Hotel Supportati
+
+Il sistema supporta attualmente i seguenti hotel su SimpleBooking:
+
+| Hotel | Località | URL SimpleBooking | ID |
+|-------|----------|-------------------|----|
+| 🏛️ **Palazzo Vitturi** | Venezia | [hotel/1467](https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR) | `palazzo-vitturi` |
+| 🏰 **Hotel Castello San Marco** | Venezia | [hotel/10118](https://www.simplebooking.it/ibe2/hotel/10118) | `castello-san-marco` |
+| ♨️ **Terme dei Papi** | Viterbo | [hotel/7304](https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR) | `terme-dei-papi` |
+
+### Aggiungere Nuovi Hotel
+
+Per aggiungere un nuovo hotel:
+
+1. **Frontend**: Aggiorna `AVAILABLE_HOTELS` in `frontend/src/components/SearchForm.jsx`
+2. **Testing**: Aggiungi URL nei file di debug e test
+3. **Verifica**: Testa che i selettori CSS funzionino correttamente
+
+```javascript
+// Esempio aggiunta nuovo hotel
+{
+  id: 'nuovo-hotel',
+  name: 'Nome Hotel', 
+  location: 'Città',
+  emoji: '🏨',
+  baseUrl: 'https://www.simplebooking.it/ibe2/hotel/XXXX?lang=IT&cur=EUR',
+  description: 'Descrizione hotel'
+}
 ```
 
 ## 🎮 Come Utilizzare

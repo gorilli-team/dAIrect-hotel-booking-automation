@@ -12,6 +12,8 @@ async function debugBookingProcess() {
   
   try {
     // Vai alla pagina dell'hotel con date e ospiti
+    // Palazzo Vitturi: https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR
+    // Terme dei Papi: https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR
     const url = 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR&in=2026-02-05&out=2026-02-07&guests=A%2CA';
     console.log('Navigando verso:', url);
     await page.goto(url);

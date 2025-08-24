@@ -20,6 +20,14 @@ const AVAILABLE_HOTELS = [
     baseUrl: 'https://www.simplebooking.it/ibe2/hotel/10118',
     description: 'Lussuoso hotel castello con vista panoramica'
   },
+  {
+    id: 'terme-dei-papi',
+    name: 'Terme dei Papi',
+    location: 'Viterbo',
+    emoji: '♨️',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR',
+    description: 'Hotel termale con acque curative e spa naturale'
+  },
   // Add more hotels here as needed
 ]
 
