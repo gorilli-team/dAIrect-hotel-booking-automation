@@ -50,8 +50,8 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
       // Use preset test dates for faster testing
       setFormData(prev => ({
         ...prev,
-        checkinDate: '2026-02-06',
-        checkoutDate: '2026-02-08'
+        checkinDate: '2026-04-03',
+        checkoutDate: '2026-04-05'
       }))
     }
   }, [initialData])
