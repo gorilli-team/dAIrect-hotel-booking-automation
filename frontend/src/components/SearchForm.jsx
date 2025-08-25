@@ -1,32 +1,42 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Search, Hotel, MapPin } from 'lucide-react'
+import { Calendar, Users, Search, Hotel, MapPin, Star } from 'lucide-react'
 import moment from 'moment'
+import './SearchForm.css'
 
 // Hotel configuration
 const HOTELS = [
   {
     id: 'palazzo-vitturi',
-    name: 'Palazzo Vitturi',
-    location: 'Venezia',
+    name: 'Hotel Palazzo Vitturi',
+    location: 'Venezia, Italia',
     emoji: '🏛️',
+    rating: 4.8,
+    reviews: 645,
     baseUrl: 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR',
-    description: 'Elegante palazzo storico nel cuore di Venezia'
+    description: 'Elegante palazzo storico nel cuore di Venezia',
+    image: 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'hotel-niccolo-v',
-    name: 'Hotel Niccolò V 4S - Terme dei Papi',
-    location: 'Viterbo',
+    name: 'Hotel Niccolò V 4S',
+    location: 'Viterbo, Italia',
     emoji: '🌿',
+    rating: 4.6,
+    reviews: 328,
     baseUrl: 'https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR',
-    description: 'Hotel 4 stelle superiore con centro benessere termale'
+    description: 'Hotel 4 stelle con centro benessere termale',
+    image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'castello-san-marco',
-    name: 'Castello San Marco Charming Hotel & SPA',
-    location: 'Calatabiano (CT)',
+    name: 'Castello San Marco Hotel & SPA',
+    location: 'Calatabiano, Sicilia',
     emoji: '🏰',
+    rating: 4.7,
+    reviews: 891,
     baseUrl: 'https://www.simplebooking.it/ibe2/hotel/10118?lang=IT&cur=EUR',
-    description: 'Resort di charme con SPA ai piedi dell\'Etna'
+    description: 'Resort di charme con SPA ai piedi dell\'Etna',
+    image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
   }
 ];
 
@@ -124,169 +134,207 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
   }
 
   return (
-    <div className="card">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          {formData.hotel.emoji} {formData.hotel.name}
-        </h2>
-        <p className="text-gray-600 flex items-center justify-center gap-2">
-          <MapPin className="h-4 w-4" />
-          {formData.hotel.location} • Automazione SimpleBooking avanzata
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Hotel Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            <Hotel className="inline h-4 w-4 mr-1" />
-            Seleziona Hotel
-          </label>
-          <div className="grid gap-3">
-            {HOTELS.map((hotel) => (
-              <div
-                key={hotel.id}
-                className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  formData.hotel.id === hotel.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-                onClick={() => handleChange('hotel', hotel)}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">{hotel.emoji}</span>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{hotel.name}</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
-                      <MapPin className="h-3 w-3" />
-                      {hotel.location}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-2">{hotel.description}</p>
-                  </div>
-                  {formData.hotel.id === hotel.id && (
-                    <div className="text-blue-500">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+    <form onSubmit={handleSubmit}>
+      {/* Hotel Selection */}
+      <div className="form-group">
+        <label className="form-label">Seleziona Hotel</label>
+        <div className="hotel-grid">
+          {HOTELS.map((hotel) => (
+            <div
+              key={hotel.id}
+              className={`hotel-card ${
+                formData.hotel.id === hotel.id ? 'hotel-card-selected' : ''
+              }`}
+              onClick={() => handleChange('hotel', hotel)}
+            >
+              <div className="hotel-card-image">
+                <img 
+                  src={hotel.image} 
+                  alt={hotel.name}
+                  className="hotel-image"
+                />
               </div>
-            ))}
-          </div>
+              <div className="hotel-card-content">
+                <h3 className="hotel-name">{hotel.name}</h3>
+                <div className="hotel-rating">
+                  <Star className="rating-icon" />
+                  <span className="rating-value">{hotel.rating}</span>
+                  <span className="rating-text">Fantastico ({hotel.reviews} recensioni)</span>
+                </div>
+                <p className="hotel-location">
+                  <MapPin className="location-icon" />
+                  {hotel.location}
+                </p>
+                <p className="hotel-description line-clamp-2">{hotel.description}</p>
+              </div>
+              {formData.hotel.id === hotel.id && (
+                <div className="hotel-selected-indicator">
+                  <div className="selected-dot" />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-        {/* Date Section */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="inline h-4 w-4 mr-1" />
-              Check-in
-            </label>
-            <input
-              type="date"
-              className={`input-field ${errors.checkinDate ? 'border-red-500' : ''}`}
-              value={formData.checkinDate}
-              onChange={(e) => handleChange('checkinDate', e.target.value)}
-              min={moment().format('YYYY-MM-DD')}
-            />
-            {errors.checkinDate && (
-              <p className="text-red-500 text-sm mt-1">{errors.checkinDate}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="inline h-4 w-4 mr-1" />
-              Check-out
-            </label>
-            <input
-              type="date"
-              className={`input-field ${errors.checkoutDate ? 'border-red-500' : ''}`}
-              value={formData.checkoutDate}
-              onChange={(e) => handleChange('checkoutDate', e.target.value)}
-              min={formData.checkinDate || moment().format('YYYY-MM-DD')}
-            />
-            {errors.checkoutDate && (
-              <p className="text-red-500 text-sm mt-1">{errors.checkoutDate}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Guests Section */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Users className="inline h-4 w-4 mr-1" />
-              Adulti
-            </label>
-            <select
-              className={`input-field ${errors.adults ? 'border-red-500' : ''}`}
-              value={formData.adults}
-              onChange={(e) => handleChange('adults', parseInt(e.target.value))}
-            >
-              {[1, 2, 3, 4, 5, 6].map(num => (
-                <option key={num} value={num}>{num} adult{num > 1 ? 'i' : 'o'}</option>
-              ))}
-            </select>
-            {errors.adults && (
-              <p className="text-red-500 text-sm mt-1">{errors.adults}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Users className="inline h-4 w-4 mr-1" />
-              Bambini
-            </label>
-            <select
-              className={`input-field ${errors.children ? 'border-red-500' : ''}`}
-              value={formData.children}
-              onChange={(e) => handleChange('children', parseInt(e.target.value))}
-            >
-              {[0, 1, 2, 3, 4].map(num => (
-                <option key={num} value={num}>
-                  {num === 0 ? 'Nessuno' : `${num} bambin${num > 1 ? 'i' : 'o'}`}
-                </option>
-              ))}
-            </select>
-            {errors.children && (
-              <p className="text-red-500 text-sm mt-1">{errors.children}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Summary */}
-        {getDaysDifference() > 0 && (
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>Riepilogo:</strong> {getDaysDifference()} nott{getDaysDifference() > 1 ? 'i' : 'e'} per{' '}
-              {formData.adults + formData.children} person{formData.adults + formData.children > 1 ? 'e' : 'a'}
-            </p>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full btn-primary flex items-center justify-center space-x-2"
-        >
-          <Search className="h-5 w-5" />
-          <span>{loading ? 'Ricerca in corso...' : 'Avvia Automazione'}</span>
-        </button>
-      </form>
-
-      {/* Info Box */}
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <h4 className="font-semibold text-gray-900 mb-2">Come funziona:</h4>
-        <ul className="text-sm text-gray-600 space-y-1">
-          <li>🎯 <strong>Playwright</strong> automatizza la navigazione</li>
-          <li>📊 Estrae camere disponibili e prezzi</li>
-          <li>💳 Simula la prenotazione (carta di test)</li>
-          <li>🔧 Sistema avanzato di automazione web</li>
-        </ul>
       </div>
-    </div>
+
+      {/* Date Selection */}
+      <div className="form-group">
+        <div className="date-grid">
+          <div>
+            <label className="form-label required">Check-in</label>
+            <div className="date-input-wrapper">
+              <Calendar className="date-icon" />
+              <input
+                type="date"
+                className={`form-input date-input ${errors.checkinDate ? 'form-input-error' : ''}`}
+                value={formData.checkinDate}
+                onChange={(e) => handleChange('checkinDate', e.target.value)}
+                min={moment().format('YYYY-MM-DD')}
+              />
+            </div>
+            {errors.checkinDate && (
+              <div className="form-error">{errors.checkinDate}</div>
+            )}
+          </div>
+
+          <div>
+            <label className="form-label required">Check-out</label>
+            <div className="date-input-wrapper">
+              <Calendar className="date-icon" />
+              <input
+                type="date"
+                className={`form-input date-input ${errors.checkoutDate ? 'form-input-error' : ''}`}
+                value={formData.checkoutDate}
+                onChange={(e) => handleChange('checkoutDate', e.target.value)}
+                min={formData.checkinDate || moment().format('YYYY-MM-DD')}
+              />
+            </div>
+            {errors.checkoutDate && (
+              <div className="form-error">{errors.checkoutDate}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Guests Selection */}
+      <div className="form-group">
+        <div className="guests-grid">
+          <div>
+            <label className="form-label required">Adulti</label>
+            <div className="counter-wrapper">
+              <button
+                type="button"
+                className="counter-btn"
+                onClick={() => handleChange('adults', Math.max(1, formData.adults - 1))}
+                disabled={formData.adults <= 1}
+              >
+                −
+              </button>
+              <div className="counter-display">
+                <span className="counter-value">{formData.adults}</span>
+                <span className="counter-label">adult{formData.adults > 1 ? 'i' : 'o'}</span>
+              </div>
+              <button
+                type="button"
+                className="counter-btn"
+                onClick={() => handleChange('adults', Math.min(6, formData.adults + 1))}
+                disabled={formData.adults >= 6}
+              >
+                +
+              </button>
+            </div>
+            {errors.adults && (
+              <div className="form-error">{errors.adults}</div>
+            )}
+          </div>
+
+          <div>
+            <label className="form-label">Bambini</label>
+            <div className="counter-wrapper">
+              <button
+                type="button"
+                className="counter-btn"
+                onClick={() => handleChange('children', Math.max(0, formData.children - 1))}
+                disabled={formData.children <= 0}
+              >
+                −
+              </button>
+              <div className="counter-display">
+                <span className="counter-value">{formData.children}</span>
+                <span className="counter-label">
+                  {formData.children === 0 ? 'bambini' : `bambin${formData.children > 1 ? 'i' : 'o'}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="counter-btn"
+                onClick={() => handleChange('children', Math.min(4, formData.children + 1))}
+                disabled={formData.children >= 4}
+              >
+                +
+              </button>
+            </div>
+            {errors.children && (
+              <div className="form-error">{errors.children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Booking Summary */}
+      {getDaysDifference() > 0 && (
+        <div className="booking-summary">
+          <div className="summary-content">
+            <div className="summary-icon">🏨</div>
+            <div>
+              <div className="summary-title">Riepilogo prenotazione</div>
+              <div className="summary-details">
+                {getDaysDifference()} nott{getDaysDifference() > 1 ? 'i' : 'e'} • {' '}
+                {formData.adults + formData.children} person{formData.adults + formData.children > 1 ? 'e' : 'a'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={loading}
+        className="btn btn-primary btn-lg btn-full search-button"
+      >
+        {loading ? (
+          <>
+            <div className="loading-spinner-small" />
+            <span>Ricerca in corso...</span>
+          </>
+        ) : (
+          <>
+            <Search className="search-icon" />
+            <span>Cerca camere disponibili</span>
+          </>
+        )}
+      </button>
+
+      {/* Features */}
+      <div className="features-section">
+        <div className="features-title">Powered by Takyon.io</div>
+        <div className="features-grid">
+          <div className="feature">
+            <span className="feature-icon">⚡</span>
+            <span className="feature-text">Automazione avanzata</span>
+          </div>
+          <div className="feature">
+            <span className="feature-icon">🔒</span>
+            <span className="feature-text">Sicuro e affidabile</span>
+          </div>
+          <div className="feature">
+            <span className="feature-icon">💎</span>
+            <span className="feature-text">Miglior prezzo garantito</span>
+          </div>
+        </div>
+      </div>
+    </form>
   )
 }
 

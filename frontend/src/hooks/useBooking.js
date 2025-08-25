@@ -27,13 +27,17 @@ export const useBooking = () => {
   }, [updateState])
 
   const startSearch = useCallback(async (searchData) => {
+    console.log('🔍 useBooking.startSearch called with:', searchData)
     setLoading('Avvio ricerca disponibilità...')
     
     try {
+      console.log('🚀 Calling bookingService.startSearch...')
       const response = await bookingService.startSearch(searchData)
+      console.log('✅ bookingService.startSearch response:', response)
       
       // Check if rooms are already available in the response
       const rooms = response.data?.rooms || []
+      console.log('🏨 Extracted rooms:', rooms.length)
       
       updateState({
         currentStep: 'rooms',
@@ -45,6 +49,7 @@ export const useBooking = () => {
 
       return response
     } catch (error) {
+      console.error('❌ useBooking.startSearch error:', error)
       setError(`Errore durante la ricerca: ${error.message}`)
       throw error
     }

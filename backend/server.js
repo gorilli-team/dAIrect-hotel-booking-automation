@@ -2,8 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const logger = require(path.join(process.cwd(), 'backend', 'utils', 'logger'));
-const bookingRoutes = require(path.join(process.cwd(), 'backend', 'routes', 'booking'));
+const logger = require('./utils/logger');
+const bookingRoutes = require('./routes/booking');
 
 const app = express();
 const PORT = process.env.PORT || 3001;

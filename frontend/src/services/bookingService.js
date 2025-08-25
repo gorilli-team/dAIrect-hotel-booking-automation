@@ -25,16 +25,35 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`)
+    console.log('📄 Response data:', response.data)
     return response.data
   },
   (error) => {
-    console.error('❌ Response Error:', error)
+    console.error('❌ Response Error FULL:', error)
+    console.error('❌ Response status:', error.response?.status)
+    console.error('❌ Response data DETAILED:', error.response?.data)
+    console.error('❌ Response headers:', error.response?.headers)
     
-    const message = error.response?.data?.message 
-      || error.response?.data?.error 
-      || error.message 
-      || 'Errore di connessione'
+    let message = 'Errore di connessione'
     
+    if (error.response?.data) {
+      const errorData = error.response.data
+      console.log('🔍 Analyzing error data:', errorData)
+      
+      // Handle validation errors with details
+      if (errorData.error === 'Validation error' && errorData.details) {
+        console.log('🚫 Validation error details:', errorData.details)
+        message = `Errore di validazione: ${errorData.details.join(', ')}`
+      } else if (errorData.error) {
+        message = errorData.error
+      } else if (errorData.message) {
+        message = errorData.message
+      }
+    } else if (error.message) {
+      message = error.message
+    }
+    
+    console.error('❌ Final error message:', message)
     throw new Error(message)
   }
 )
@@ -52,13 +71,30 @@ export const bookingService = {
    */
   async startSearch(searchData) {
     try {
-      const response = await api.post('/start-search', {
+      console.log('🔍 startSearch called with searchData:', searchData)
+      console.log('🏨 Hotel object:', searchData.hotel)
+      
+      // Filter hotel object to only include backend-required fields
+      const hotelForBackend = {
+        id: searchData.hotel.id,
+        name: searchData.hotel.name,
+        location: searchData.hotel.location,
+        emoji: searchData.hotel.emoji,
+        baseUrl: searchData.hotel.baseUrl,
+        description: searchData.hotel.description
+      }
+      
+      const requestPayload = {
         checkinDate: searchData.checkinDate,
         checkoutDate: searchData.checkoutDate,
         adults: parseInt(searchData.adults),
         children: parseInt(searchData.children) || 0,
-        hotel: searchData.hotel
-      })
+        hotel: hotelForBackend
+      }
+      
+      console.log('📤 Sending request payload:', requestPayload)
+      
+      const response = await api.post('/start-search', requestPayload)
       
       return response
     } catch (error) {
