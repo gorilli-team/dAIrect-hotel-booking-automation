@@ -87,7 +87,63 @@ export const useBooking = () => {
 
     try {
       const response = await bookingService.selectRoom(state.sessionId, roomId, optionId)
-      const room = state.availableRooms.find(r => r.id === roomId)
+      let room = state.availableRooms.find(r => r.id === roomId)
+      
+      // After successful room selection, extract the sidebar summary data
+      try {
+        setLoading('Estrazione dati prenotazione...')
+        const summaryResponse = await bookingService.getPersonalDataSummary(state.sessionId)
+        
+        if (summaryResponse.success && room) {
+          // Enrich the room data with the extracted sidebar summary
+          room = {
+            ...room,
+            summaryStructured: {
+              // Reservation summary data
+              checkinDate: summaryResponse.reservationSummary?.checkinDate,
+              checkoutDate: summaryResponse.reservationSummary?.checkoutDate,
+              nights: summaryResponse.reservationSummary?.nights,
+              guests: summaryResponse.reservationSummary?.guests,
+              
+              // Cart data
+              roomName: summaryResponse.cart?.roomName,
+              occupants: summaryResponse.cart?.occupants,
+              rateName: summaryResponse.cart?.rateName,
+              mealPlan: summaryResponse.cart?.mealPlan,
+              refundability: summaryResponse.cart?.refundability,
+              
+              // Pricing data
+              roomPrice: summaryResponse.cart?.roomPrice,
+              roomPriceFormatted: summaryResponse.cart?.roomPriceFormatted,
+              originalRoomPrice: summaryResponse.cart?.originalRoomPrice,
+              originalRoomPriceFormatted: summaryResponse.cart?.originalRoomPriceFormatted,
+              
+              // Taxes
+              taxes: summaryResponse.cart?.taxes,
+              
+              // Services
+              mandatoryServices: summaryResponse.cart?.mandatoryServices || [],
+              
+              // Final totals
+              totalPrice: summaryResponse.cart?.totalPrice,
+              totalPriceFormatted: summaryResponse.cart?.totalPriceFormatted,
+              originalTotalPrice: summaryResponse.cart?.originalTotalPrice,
+              originalTotalPriceFormatted: summaryResponse.cart?.originalTotalPriceFormatted,
+              
+              // Voucher
+              voucher: summaryResponse.voucher,
+              
+              // Raw HTML for fallback
+              sidebarHtml: summaryResponse.sidebarHtml,
+              reservationSummaryHtml: summaryResponse.reservationSummary?.html,
+              cartHtml: summaryResponse.cart?.html
+            }
+          }
+        }
+      } catch (summaryError) {
+        console.warn('Failed to extract sidebar summary, proceeding without it:', summaryError.message)
+        // Continue without summary data
+      }
 
       updateState({
         selectedRoom: room,

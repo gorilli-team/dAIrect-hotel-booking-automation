@@ -225,6 +225,21 @@ export const bookingService = {
   },
 
   /**
+   * Get personal data summary with booking details from sidebar
+   * @param {string} sessionId - Session identifier
+   * @returns {Promise<Object>} Booking summary data
+   */
+  async getPersonalDataSummary(sessionId) {
+    try {
+      const response = await api.get(`/personal-data-summary/${sessionId}`)
+      return response
+    } catch (error) {
+      console.error('Error getting personal data summary:', error)
+      throw error
+    }
+  },
+
+  /**
    * Clean up session
    * @param {string} sessionId - Session identifier
    * @returns {Promise<Object>} Cleanup result

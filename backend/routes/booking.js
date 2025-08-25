@@ -2047,6 +2047,244 @@ router.post('/test-phone-field', async (req, res) => {
   }
 });
 
+// GET /api/booking/personal-data-summary/:sessionId - Extract booking summary from sidebar DOM
+router.get('/personal-data-summary/:sessionId', async (req, res) => {
+  logger.info('Personal data summary endpoint called');
+  
+  const { sessionId } = req.params;
+  const session = sessions.get(sessionId);
+
+  if (!session || !session.page) {
+    return res.status(404).json({
+      error: 'Session not found or page not available'
+    });
+  }
+
+  try {
+    logger.info('Extracting booking summary from sidebar DOM', { sessionId });
+
+    // Attempt to close any overlays first
+    try {
+      await aiService.closeOverlays(session.page, { maxMs: 500 });
+    } catch {}
+
+    // Extract all the sidebar booking data using the exact selectors from your HTML
+    const summaryData = await session.page.evaluate(() => {
+      const tryText = (selector) => {
+        try {
+          const el = document.querySelector(selector);
+          return el ? el.textContent?.trim() : null;
+        } catch {
+          return null;
+        }
+      };
+      
+      const tryHTML = (selector) => {
+        try {
+          const el = document.querySelector(selector);
+          return el ? el.outerHTML : null;
+        } catch {
+          return null;
+        }
+      };
+      
+      const parsePrice = (priceText) => {
+        if (!priceText) return null;
+        try {
+          // Remove currency symbols and extract number
+          let cleaned = priceText.replace(/[€$£¥]/g, '').replace(/[^0-9.,]/g, '');
+          if (cleaned.includes('.') && cleaned.includes(',')) {
+            // Handle European format: 1.649,76
+            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+          } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+            // Handle format: 1649,76
+            cleaned = cleaned.replace(',', '.');
+          }
+          const num = parseFloat(cleaned);
+          return isNaN(num) ? null : num;
+        } catch {
+          return null;
+        }
+      };
+      
+      // SECTION 1: Reservation Summary (Date information)
+      const reservationSummary = {
+        html: tryHTML('.ReservationSummary.e1dfdjmq10'),
+        checkinDate: null,
+        checkoutDate: null,
+        nights: null,
+        guests: null
+      };
+      
+      // Extract check-in date (first date block)
+      const checkinDayName = tryText('.e1dfdjmq8:nth-child(1) .e1dfdjmq1'); // "venerdì"
+      const checkinDay = tryText('.e1dfdjmq8:nth-child(1) .e1dfdjmq6 b'); // "6"
+      const checkinMonth = tryText('.e1dfdjmq8:nth-child(1) .e1dfdjmq5 b'); // "feb 2026"
+      
+      if (checkinDayName && checkinDay && checkinMonth) {
+        reservationSummary.checkinDate = `${checkinDayName} ${checkinDay} ${checkinMonth}`;
+      }
+      
+      // Extract check-out date (third child, skipping the arrow)
+      const checkoutDayName = tryText('.e1dfdjmq8:nth-child(3) .e1dfdjmq1'); // "domenica"
+      const checkoutDay = tryText('.e1dfdjmq8:nth-child(3) .e1dfdjmq6 b'); // "8"
+      const checkoutMonth = tryText('.e1dfdjmq8:nth-child(3) .e1dfdjmq5 b'); // "feb 2026"
+      
+      if (checkoutDayName && checkoutDay && checkoutMonth) {
+        reservationSummary.checkoutDate = `${checkoutDayName} ${checkoutDay} ${checkoutMonth}`;
+      }
+      
+      // Extract nights - multiple selector strategy
+      reservationSummary.nights = tryText('.IconAndTextWithLabel .label:contains("Notti") + .IconAndText .IconAndText__Text') ||
+                                   tryText('.e1dfdjmq3:has(.label) .IconAndText__Text') ||
+                                   tryText('.IconAndText__Text'); // First occurrence is nights
+      
+      // Extract guests - multiple selector strategy  
+      reservationSummary.guests = tryText('.IconAndTextWithLabel .label:contains("Ospiti") + .IconAndText .IconAndText__Text') ||
+                                  document.querySelectorAll('.IconAndText__Text')[1]?.textContent?.trim() ||
+                                  tryText('.IconAndText__Text:nth-of-type(2)');
+      
+      // SECTION 2: Cart (Room and pricing information)
+      const cart = {
+        html: tryHTML('.Cart.e1kagkvk5'),
+        roomName: null,
+        occupants: null,
+        rateName: null,
+        mealPlan: null,
+        refundability: null,
+        roomPrice: null,
+        originalRoomPrice: null,
+        taxes: null,
+        mandatoryServices: [],
+        totalPrice: null,
+        originalTotalPrice: null
+      };
+      
+      // Extract room name
+      cart.roomName = tryText('.Cart__Room__Name .CTA_Text'); // "Suite con Balcone DELUXE"
+      
+      // Extract occupants
+      cart.occupants = tryText('.e1m2olwc0'); // "2 Adulti"
+      
+      // Extract rate name
+      cart.rateName = tryText('.Cart__Room__Rate'); // "Tariffa RIVENDIBILE - Takyon..."
+      
+      // Extract meal plan
+      cart.mealPlan = tryText('.Cart__Room__MealPlan'); // "Camera e Colazione"
+      
+      // Extract refundability
+      cart.refundability = tryText('.e13o920w4'); // "Non rimborsabile"
+      
+      // Extract room price (main amount)
+      const roomPriceText = tryText('.Cart__Room .mainAmount span');
+      if (roomPriceText) {
+        cart.roomPrice = parsePrice(roomPriceText);
+        cart.roomPriceFormatted = roomPriceText;
+      }
+      
+      // Extract original room price (if discounted)
+      const originalRoomPriceText = tryText('.Cart__Room .originalAmount');
+      if (originalRoomPriceText) {
+        cart.originalRoomPrice = parsePrice(originalRoomPriceText);
+        cart.originalRoomPriceFormatted = originalRoomPriceText;
+      }
+      
+      // Extract taxes information
+      const taxesText = tryText('.Cart__Room .discount.e1rm81ho1');
+      const taxesAmountText = tryText('.Cart__Room .discount.e1rm81ho1 .e1rm81ho0');
+      if (taxesText && taxesAmountText) {
+        cart.taxes = {
+          description: taxesText.replace(taxesAmountText, '').trim(), // "Tasse incluse"
+          amount: parsePrice(taxesAmountText),
+          amountFormatted: taxesAmountText
+        };
+      }
+      
+      // Extract mandatory services
+      const serviceElements = document.querySelectorAll('.Cart__MandatoryServicesList .ltr-199jhfg');
+      serviceElements.forEach(serviceEl => {
+        try {
+          const serviceName = serviceEl.querySelector('.CartServiceItem')?.textContent?.trim();
+          const servicePriceText = serviceEl.parentElement?.querySelector('.mainAmount span')?.textContent?.trim();
+          
+          if (serviceName && servicePriceText) {
+            cart.mandatoryServices.push({
+              name: serviceName,
+              price: parsePrice(servicePriceText),
+              priceFormatted: servicePriceText
+            });
+          }
+        } catch {}
+      });
+      
+      // Extract total price
+      const totalPriceText = tryText('.Cart__Totals .mainAmount span');
+      if (totalPriceText) {
+        cart.totalPrice = parsePrice(totalPriceText);
+        cart.totalPriceFormatted = totalPriceText;
+      }
+      
+      // Extract original total price (if discounted)
+      const originalTotalPriceText = tryText('.Cart__Totals .originalAmount');
+      if (originalTotalPriceText) {
+        cart.originalTotalPrice = parsePrice(originalTotalPriceText);
+        cart.originalTotalPriceFormatted = originalTotalPriceText;
+      }
+      
+      // Extract voucher section
+      const voucher = {
+        html: tryHTML('.VoucherForm.e1n28f8a7'),
+        available: !!document.querySelector('.VoucherForm__ShowFormButton')
+      };
+      
+      // Get the complete sidebar HTML for fallback
+      const sidebarHtml = tryHTML('.DesktopSidebar.e15sxj6q4');
+      
+      return {
+        reservationSummary,
+        cart,
+        voucher,
+        sidebarHtml,
+        fullSidebarText: document.querySelector('.DesktopSidebar')?.textContent?.trim()
+      };
+    });
+    
+    // Take a screenshot for debugging
+    try {
+      await session.page.screenshot({ 
+        path: `backend/logs/personal-data-summary-${sessionId}.png`,
+        fullPage: true
+      });
+    } catch {}
+    
+    logger.info('Successfully extracted sidebar booking data:', {
+      sessionId,
+      hasReservationSummary: !!summaryData.reservationSummary.html,
+      hasCart: !!summaryData.cart.html,
+      roomName: summaryData.cart.roomName,
+      totalPrice: summaryData.cart.totalPriceFormatted,
+      checkinDate: summaryData.reservationSummary.checkinDate,
+      nights: summaryData.reservationSummary.nights
+    });
+    
+    res.json({
+      success: true,
+      sessionId,
+      currentStep: session.currentStep,
+      ...summaryData
+    });
+
+  } catch (error) {
+    logger.error('Error extracting personal data summary:', error);
+    
+    res.status(500).json({
+      error: 'Failed to extract booking summary',
+      details: error.message,
+      sessionId
+    });
+  }
+});
+
 // DELETE /api/booking/session/:sessionId
 router.delete('/session/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
