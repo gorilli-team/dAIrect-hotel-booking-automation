@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Phone, CreditCard, ArrowLeft } from 'lucide-react'
+import { Phone, CreditCard, ArrowLeft, Calendar, Users, Moon, MapPin, Tag } from 'lucide-react'
 
 const PaymentForm = ({ room, onSubmit, onBack, loading }) => {
   const [formData, setFormData] = useState({
@@ -75,12 +75,201 @@ const PaymentForm = ({ room, onSubmit, onBack, loading }) => {
         <h2 className="text-2xl font-bold">Dati di pagamento</h2>
       </div>
 
-      {/* Room Summary */}
-      <div className="bg-blue-50 p-4 rounded-lg mb-6">
-        <h3 className="font-semibold text-blue-900 mb-2">Camera selezionata:</h3>
-        <p className="text-blue-800">
-          <strong>{room.name}</strong> - {room.price} {room.currency}/notte
-        </p>
+      {/* Dynamic Booking Summary - 3 Column Layout */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mb-6 shadow-sm">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+          <MapPin className="h-5 w-5 mr-2 text-green-600" />
+          Riepilogo della tua prenotazione
+        </h3>
+        
+        {/* 3 Column Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Column 1: Date & Stay Info */}
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-lg border border-green-100">
+              <div className="flex items-center mb-3">
+                <Calendar className="h-4 w-4 text-green-600 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Date soggiorno</span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Check-in</span>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {room.summaryStructured?.checkinDate || 'Data da confermare'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Check-out</span>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {room.summaryStructured?.checkoutDate || 'Data da confermare'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-green-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Moon className="h-4 w-4 text-green-600 mr-2" />
+                  <span className="text-sm font-medium text-gray-700">Notti</span>
+                </div>
+                <span className="text-lg font-bold text-green-700">
+                  {room.summaryStructured?.nights || '2'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-green-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Users className="h-4 w-4 text-green-600 mr-2" />
+                  <span className="text-sm font-medium text-gray-700">Ospiti</span>
+                </div>
+                <span className="text-lg font-bold text-green-700">
+                  {room.summaryStructured?.guests || room.summaryStructured?.occupants || '2 Adulti'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Column 2: Room & Rate Details */}
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-lg border border-blue-100">
+              <div className="flex items-center mb-3">
+                <MapPin className="h-4 w-4 text-blue-600 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Camera selezionata</span>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-800 text-sm leading-tight">
+                  {room.summaryStructured?.roomName || room.name}
+                </h4>
+                <p className="text-xs text-gray-600">
+                  {room.summaryStructured?.occupants || '2 Adulti'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-blue-100">
+              <div className="flex items-center mb-3">
+                <Tag className="h-4 w-4 text-blue-600 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Tariffa & Trattamento</span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-gray-800 leading-tight">
+                  {room.summaryStructured?.rateName || 'Tariffa selezionata'}
+                </p>
+                <p className="text-xs text-blue-700 font-medium">
+                  {room.summaryStructured?.mealPlan || 'Camera e Colazione'}
+                </p>
+                {room.summaryStructured?.refundability && (
+                  <div className="flex items-center mt-2">
+                    <div className="w-2 h-2 bg-orange-400 rounded-full mr-2"></div>
+                    <span className="text-xs text-orange-700 font-medium">
+                      {room.summaryStructured.refundability}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Column 3: Pricing Summary */}
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-lg border border-emerald-100">
+              <div className="flex items-center mb-3">
+                <CreditCard className="h-4 w-4 text-emerald-600 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Importo da pagare</span>
+              </div>
+              
+              <div className="space-y-3">
+                {/* Room Price */}
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Camera</span>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gray-800">
+                      {room.summaryStructured?.roomPriceFormatted || `€ ${room.price}`}
+                    </div>
+                    {room.summaryStructured?.originalRoomPriceFormatted && (
+                      <div className="text-xs text-gray-500 line-through">
+                        {room.summaryStructured.originalRoomPriceFormatted}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Mandatory Services */}
+                {room.summaryStructured?.mandatoryServices?.length > 0 && (
+                  <div className="border-t pt-2">
+                    {room.summaryStructured.mandatoryServices.map((service, idx) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <span className="text-xs text-gray-600">{service.name}</span>
+                        <span className="text-xs font-semibold text-gray-700">
+                          {service.priceFormatted}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Taxes */}
+                {room.summaryStructured?.taxes && (
+                  <div className="text-xs text-gray-600 flex justify-between">
+                    <span>{room.summaryStructured.taxes.description}</span>
+                    <span>{room.summaryStructured.taxes.amountFormatted}</span>
+                  </div>
+                )}
+                
+                {/* Total */}
+                <div className="border-t-2 border-emerald-200 pt-3 mt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-gray-800">Totale da pagare</span>
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-emerald-700">
+                        {room.summaryStructured?.totalPriceFormatted || `€ ${room.price}`}
+                      </div>
+                      {room.summaryStructured?.originalTotalPriceFormatted && (
+                        <div className="text-xs text-gray-500 line-through">
+                          {room.summaryStructured.originalTotalPriceFormatted}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Savings indicator */}
+                  {room.summaryStructured?.originalTotalPrice && room.summaryStructured?.totalPrice && (
+                    <div className="mt-2 text-center">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Risparmi €{(room.summaryStructured.originalTotalPrice - room.summaryStructured.totalPrice).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Voucher Section */}
+            {room.summaryStructured?.voucher?.available && (
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <div className="flex items-center text-yellow-800">
+                  <Tag className="h-4 w-4 mr-2" />
+                  <span className="text-xs font-medium">Hai un voucher da applicare?</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Payment Security Notice */}
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+          <div className="flex items-center mb-2">
+            <CreditCard className="h-4 w-4 text-green-600 mr-2" />
+            <span className="text-sm font-medium text-green-800">Pagamento sicuro</span>
+          </div>
+          <p className="text-xs text-green-700">
+            I tuoi dati di pagamento sono protetti da crittografia SSL. Il pagamento sarà elaborato in modo sicuro.
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
