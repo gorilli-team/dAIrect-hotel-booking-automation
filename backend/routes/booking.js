@@ -62,22 +62,26 @@ async function extractRoomsWithSelectors(page) {
       };
       
       const extractPrice = (priceText) => {
-        if (!priceText) return '99';
+        if (!priceText) return 99.00;
         let cleaned = priceText.replace(/[^0-9,.]/g, '');
         if (cleaned.includes('.') && cleaned.includes(',')) {
+          // European format: 1.649,76
           cleaned = cleaned.replace(/\./g, '').replace(',', '.');
         } else if (cleaned.includes(',') && !cleaned.includes('.')) {
+          // Format: 1649,76
           cleaned = cleaned.replace(',', '.');
         } else if (cleaned.includes('.') && !cleaned.includes(',')) {
           const parts = cleaned.split('.');
           if (parts.length === 2 && parts[1].length <= 2) {
+            // Already in correct format: 1649.76
             cleaned = cleaned;
           } else {
+            // Multiple dots, treat as thousands separator: 1.649.76 -> 1649.76
             cleaned = cleaned.replace(/\./g, '');
           }
         }
         const numericPrice = parseFloat(cleaned);
-        return !isNaN(numericPrice) && numericPrice > 0 ? Math.floor(numericPrice).toString() : '99';
+        return !isNaN(numericPrice) && numericPrice > 0 ? numericPrice : 99.00;
       };
       
       // Find all room containers at once
@@ -243,7 +247,7 @@ async function extractRoomsWithSelectors(page) {
             }
           });
           
-          const roomPriceNumber = parseInt(price) || 99;
+          const roomPriceNumber = parseFloat(price) || 99.00;
           const room = {
             id: `room-${i + 1}`,
             name: title.trim(),
