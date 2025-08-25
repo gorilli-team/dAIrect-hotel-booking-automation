@@ -1,9 +1,38 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Search } from 'lucide-react'
+import { Calendar, Users, Search, Hotel, MapPin } from 'lucide-react'
 import moment from 'moment'
+
+// Hotel configuration
+const HOTELS = [
+  {
+    id: 'palazzo-vitturi',
+    name: 'Palazzo Vitturi',
+    location: 'Venezia',
+    emoji: '🏛️',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR',
+    description: 'Elegante palazzo storico nel cuore di Venezia'
+  },
+  {
+    id: 'hotel-niccolo-v',
+    name: 'Hotel Niccolò V 4S - Terme dei Papi',
+    location: 'Viterbo',
+    emoji: '🌿',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/7304?lang=IT&cur=EUR',
+    description: 'Hotel 4 stelle superiore con centro benessere termale'
+  },
+  {
+    id: 'castello-san-marco',
+    name: 'Castello San Marco Charming Hotel & SPA',
+    location: 'Calatabiano (CT)',
+    emoji: '🏰',
+    baseUrl: 'https://www.simplebooking.it/ibe2/hotel/10118?lang=IT&cur=EUR',
+    description: 'Resort di charme con SPA ai piedi dell\'Etna'
+  }
+];
 
 const SearchForm = ({ onSearch, loading, initialData }) => {
   const [formData, setFormData] = useState({
+    hotel: HOTELS[0], // Default to first hotel
     checkinDate: '',
     checkoutDate: '',
     adults: 2,
@@ -98,14 +127,54 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
     <div className="card">
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          🏛️ Palazzo Vitturi - Venezia
+          {formData.hotel.emoji} {formData.hotel.name}
         </h2>
-        <p className="text-gray-600">
-          Automazione SimpleBooking avanzata
+        <p className="text-gray-600 flex items-center justify-center gap-2">
+          <MapPin className="h-4 w-4" />
+          {formData.hotel.location} • Automazione SimpleBooking avanzata
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Hotel Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            <Hotel className="inline h-4 w-4 mr-1" />
+            Seleziona Hotel
+          </label>
+          <div className="grid gap-3">
+            {HOTELS.map((hotel) => (
+              <div
+                key={hotel.id}
+                className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  formData.hotel.id === hotel.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+                onClick={() => handleChange('hotel', hotel)}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">{hotel.emoji}</span>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900">{hotel.name}</h3>
+                    <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                      <MapPin className="h-3 w-3" />
+                      {hotel.location}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">{hotel.description}</p>
+                  </div>
+                  {formData.hotel.id === hotel.id && (
+                    <div className="text-blue-500">
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         {/* Date Section */}
         <div className="grid md:grid-cols-2 gap-4">
           <div>

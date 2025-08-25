@@ -47,6 +47,7 @@ export const bookingService = {
    * @param {string} searchData.checkoutDate - Check-out date (YYYY-MM-DD)
    * @param {number} searchData.adults - Number of adults
    * @param {number} searchData.children - Number of children
+   * @param {Object} searchData.hotel - Selected hotel object
    * @returns {Promise<Object>} Search result with sessionId
    */
   async startSearch(searchData) {
@@ -55,7 +56,8 @@ export const bookingService = {
         checkinDate: searchData.checkinDate,
         checkoutDate: searchData.checkoutDate,
         adults: parseInt(searchData.adults),
-        children: parseInt(searchData.children) || 0
+        children: parseInt(searchData.children) || 0,
+        hotel: searchData.hotel
       })
       
       return response

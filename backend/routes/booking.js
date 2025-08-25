@@ -7,7 +7,8 @@ const aiService = require('../services/aiSelector');
 
 // Funzione per costruire URL diretto SimpleBooking
 function buildDirectSearchUrl(searchParams) {
-  const baseUrl = process.env.TARGET_HOTEL_URL || 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR';
+  // Usa l'URL base dall'hotel selezionato, altrimenti fallback a Palazzo Vitturi
+  const baseUrl = searchParams.hotel?.baseUrl || process.env.TARGET_HOTEL_URL || 'https://www.simplebooking.it/ibe2/hotel/1467?lang=IT&cur=EUR';
   
   // Costruisce parametri date
   const dateParams = `&in=${searchParams.checkinDate}&out=${searchParams.checkoutDate}`;
@@ -586,7 +587,15 @@ const searchSchema = Joi.object({
   checkinDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
   checkoutDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
   adults: Joi.number().integer().min(1).max(6).required(),
-  children: Joi.number().integer().min(0).max(4).default(0)
+  children: Joi.number().integer().min(0).max(4).default(0),
+  hotel: Joi.object({
+    id: Joi.string().required(),
+    name: Joi.string().required(),
+    location: Joi.string().required(),
+    emoji: Joi.string().required(),
+    baseUrl: Joi.string().uri().required(),
+    description: Joi.string().required()
+  }).required()
 });
 
 const personalDataSchema = Joi.object({
@@ -616,14 +625,15 @@ router.post('/start-search', async (req, res) => {
       });
     }
 
-    const { checkinDate, checkoutDate, adults, children } = value;
+    const { checkinDate, checkoutDate, adults, children, hotel } = value;
     const sessionId = uuidv4();
 
     logger.info(`Starting booking search for session ${sessionId}`, {
       checkinDate,
       checkoutDate,
       adults,
-      children
+      children,
+      hotel: hotel.name
     });
 
     // Initialize Playwright session with new browser instance
@@ -667,15 +677,15 @@ router.post('/start-search', async (req, res) => {
       sessionId,
       browser,
       page,
-      searchParams: { checkinDate, checkoutDate, adults, children },
+      searchParams: { checkinDate, checkoutDate, adults, children, hotel },
       currentStep: 'search',
       createdAt: new Date(),
       lastActivity: new Date()
     });
 
     // Costruisce URL diretto con parametri di ricerca
-    const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children });
-    logger.info('Using direct URL for search', { directUrl });
+    const directUrl = buildDirectSearchUrl({ checkinDate, checkoutDate, adults, children, hotel });
+    logger.info('Using direct URL for search', { directUrl, hotel: hotel.name });
 
     // Navigate directly to search results page with retry logic
     let navigationSuccess = false;
