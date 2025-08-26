@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import './RoomSelection.css'
 
 // Componente per visualizzare il blocco prezzo completo con styling personalizzato
 const PriceBlockDisplay = ({ priceBlockHtml }) => {
@@ -248,295 +249,253 @@ const ImageCarousel = ({ images, roomName }) => {
 }
 
 const RoomSelection = ({ rooms, onSelectRoom, loading, onBack }) => {
-  const [expandedRoomId, setExpandedRoomId] = useState(null)
+  const [selectedRoomId, setSelectedRoomId] = useState(null)
+  const [showRateOptions, setShowRateOptions] = useState(false)
 
-  const handleRoomToggle = (roomId) => {
-    setExpandedRoomId(expandedRoomId === roomId ? null : roomId)
+  const handleRoomSelect = (room) => {
+    setSelectedRoomId(room.id)
+    setShowRateOptions(true)
   }
 
   const handleOptionSelect = (roomId, optionId) => {
-    console.log('🎯 RoomSelection.handleOptionSelect called with:', { roomId, optionId, type: typeof optionId })
-    setExpandedRoomId(null)
-    // Chiama la funzione originale di selezione camera con l'opzione scelta
+    console.log('🎯 RoomSelection.handleOptionSelect called with:', { roomId, optionId })
     onSelectRoom(roomId, optionId)
   }
 
-  return (
-    <div className="card">
-      <h2 className="text-2xl font-bold mb-4">Seleziona una camera</h2>
+  const handleBack = () => {
+    if (showRateOptions) {
+      setShowRateOptions(false)
+      setSelectedRoomId(null)
+    } else {
+      onBack()
+    }
+  }
 
-      {rooms.length === 0 ? (
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Nessuna camera disponibile per le date selezionate.</p>
-          <button onClick={onBack} className="btn-secondary">
-            Torna Indietro
-          </button>
+  const selectedRoom = rooms.find(room => room.id === selectedRoomId)
+
+  if (showRateOptions && selectedRoom) {
+    return (
+      <div className="room-selection-container">
+        {/* Header section */}
+        <div className="selection-header">
+          <h2 className="selection-title">Seleziona la camera</h2>
+          <div className="selection-subtitle">
+            30 Mag - 02 Giu • 2 ospiti
+          </div>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {rooms.map((room) => (
-            <div key={room.id} className="border rounded-lg shadow-lg overflow-hidden bg-white hover:shadow-xl transition-shadow duration-300">
-              {/* Layout a griglia: immagini a sinistra, dettagli a destra */}
-              <div className="md:flex">
-                {/* Sezione Immagini */}
-                <div className="md:w-1/3 p-4">
-                  <ImageCarousel images={room.images} roomName={room.name} />
+
+        {/* Selected Room Card */}
+        <div className="selected-room-card">
+          <div className="room-card-layout">
+            <div className="room-image-container">
+              <img 
+                src={selectedRoom.images?.[0] || 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'}
+                alt={selectedRoom.name}
+                className="room-image"
+              />
+              {selectedRoom.availabilityInfo && (
+                <div className="availability-badge">
+                  Ne resta solo {selectedRoom.availabilityInfo.remaining || 1}
                 </div>
-                
-                {/* Sezione Dettagli */}
-                <div className="md:w-2/3 p-6 flex flex-col justify-between">
-                  <div className="mb-4">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                      {room.name}
-                    </h3>
-                    
-                    {/* Blocco Prezzo Completo */}
-                    {room.priceBlock ? (
-                      <div className="mb-4">
-                        <PriceBlockDisplay priceBlockHtml={room.priceBlock.html} />
-                      </div>
-                    ) : (
-                      /* Fallback al prezzo semplice se priceBlock non disponibile */
-                      <div className="mb-4">
-                        <div className="mb-3">
-                          <span className="text-3xl font-bold text-blue-600">
-                            €{room.price}
-                          </span>
-                          <span className="text-gray-500 ml-2">per notte</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Blocco informazioni camera con styling migliorato */}
-                    {room.roomInfoBlock && (
-                      <div className="mb-4">
-                        <RoomInfoDisplay roomInfoHtml={room.roomInfoBlock.html} />
-                      </div>
-                    )}
-                    
-                    {/* Descrizione - subito dopo prezzo/mq/max persone */}
-                    {room.description && (
-                      <div className="mb-4">
-                        <p className="text-gray-600 text-sm leading-relaxed italic">
-                          {room.description}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {/* Features/Servizi */}
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">
-                        Servizi inclusi
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {room.features.map((feature, index) => (
-                          <span 
-                            key={index}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200"
-                          >
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            {feature}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* Disponibilità limitata */}
-                    {(room.availabilityInfo || room.limitedAvailability) && (
-                      <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <svg className="w-5 h-5 text-orange-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            <div>
-                              {room.availabilityInfo ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-orange-800 text-sm font-medium">
-                                    {room.availabilityInfo.description || 'Disponibilità limitata'}
-                                  </span>
-                                  {room.availabilityInfo.remaining && (
-                                    <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-bold">
-                                      {room.availabilityInfo.remaining} rimaste
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-orange-800 text-sm font-medium">
-                                  {room.limitedAvailability}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Urgency indicator */}
-                          {room.availabilityInfo && room.availabilityInfo.remaining <= 2 && (
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 animate-pulse">
-                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
-                                Pochissime rimaste!
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Bottone Selezione */}
-                  <div className="text-right">
-                    <button
-                      onClick={() => handleRoomToggle(room.id)}
-                      disabled={loading}
-                      className="btn-primary px-8 py-3 text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:hover:shadow-lg"
-                    >
-                      {loading ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 718-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Prenotazione in corso...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          {expandedRoomId === room.id ? 'Chiudi Opzioni' : 'Seleziona questa Camera'}
-                        </>
-                      )}
-                    </button>
-                  </div>
+              )}
+            </div>
+            
+            <div className="room-details">
+              <h3 className="room-title">{selectedRoom.name}</h3>
+              <div className="room-meta">
+                <div className="room-meta-item">
+                  <span className="meta-value">38 m²</span>
+                  <span className="meta-separator">|</span>
+                  <span className="meta-value">Max ospiti: 5</span>
+                  <span className="meta-icon">👥</span>
+                  <span className="meta-value">1</span>
+                  <span className="meta-icon">🚼</span>
                 </div>
               </div>
               
-              {/* Sezione Collapse con opzioni di prenotazione */}
-              {expandedRoomId === room.id && (
-                <div className="border-t bg-gray-50 p-6 transition-all duration-300 ease-in-out">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                    Scegli la tua opzione di prenotazione:
-                  </h4>
+              <p className="room-description line-clamp-3">
+                {selectedRoom.description || 'Suite con balconcini privati e vista Campo e Canale. Ambiente esclusivo e di pregio, di circa 50 mq, con camera da letto e splendido salotto...'}
+                <button className="read-more-btn">leggi di più</button>
+              </p>
+              
+              <div className="room-features">
+                <div className="features-title">Servizi inclusi:</div>
+                <div className="feature-list">
+                  <div className="feature-item">Aria condizionata</div>
+                  <div className="feature-item">Insonorizzazione</div>
+                  <div className="feature-item">Balcone</div>
+                  <div className="feature-item">Free Wi-Fi</div>
+                  <button className="feature-more">Vedi tutti</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rate Options */}
+        <div className="rate-options-container">
+          {selectedRoom.bookingOptions && selectedRoom.bookingOptions.length > 0 ? (
+            selectedRoom.bookingOptions.map((option) => (
+              <div key={option.id} className="rate-option-card">
+                {option.specialOffer && (
+                  <div className="special-offer-badge">Offerta speciale</div>
+                )}
+                <div className="rate-content">
+                  <h4 className="rate-name">{option.name}</h4>
+                  <p className="rate-description line-clamp-2">
+                    {option.description || 'Camera e Colazione inclusa'}
+                  </p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {room.bookingOptions && room.bookingOptions.length > 0 ? (
-                      room.bookingOptions.map((option) => (
-                        <div key={option.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="font-semibold text-gray-800">{option.name}</h5>
-                            {option.specialOffer && (
-                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded">
-                                Offerta
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Prezzo con eventuale sconto */}
-                          <div className="mb-3">
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-lg font-bold text-gray-900">€{option.price}</span>
-                              {option.discountInfo && (
-                                <>
-                                  <span className="text-sm text-gray-500 line-through">{option.discountInfo.originalPrice}</span>
-                                  <span className="text-sm text-red-600 font-medium">{option.discountInfo.percent}</span>
-                                </>
-                              )}
-                            </div>
-                            {option.mealPlan && (
-                              <p className="text-xs text-gray-600 mt-1">{option.mealPlan}</p>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-                            {option.description && option.description.length > 100 
-                              ? option.description.substring(0, 100) + '...' 
-                              : option.description
-                            }
-                          </p>
-                          
-                          {/* Politica di cancellazione */}
-                          {option.cancellationPolicy && (
-                            <div className="mb-3">
-                              <div className={`flex items-center text-xs px-2 py-1 rounded-full ${
-                                option.cancellationPolicy.refundable 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : 'bg-red-100 text-red-700'
-                              }`}>
-                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  {option.cancellationPolicy.refundable ? (
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  ) : (
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                  )}
-                                </svg>
-                                {option.cancellationPolicy.refundable ? 'Rimborsabile' : 'Non rimborsabile'}
-                              </div>
-                            </div>
-                          )}
-                          
-                          <button
-                            onClick={() => handleOptionSelect(room.id, option.id)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors"
-                          >
-                            Prenota €{option.price}
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      // Fallback se non ci sono opzioni di prenotazione estratte
-                      <>
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Standard</h5>
-                          <p className="text-sm text-gray-600 mb-3">
-                            Prenotazione classica con cancellazione gratuita fino a 24h prima del check-in
-                          </p>
-                          <button
-                            onClick={() => handleOptionSelect(room.id, 'standard')}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors"
-                          >
-                            Prenota Standard
-                          </button>
-                        </div>
-                        
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Flessibile</h5>
-                          <p className="text-sm text-gray-600 mb-3">
-                            Cancellazione gratuita fino a 1 ora prima del check-in. Modifica date senza costi.
-                          </p>
-                          <button
-                            onClick={() => handleOptionSelect(room.id, 'flexible')}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition-colors"
-                          >
-                            Prenota Flessibile
-                          </button>
-                        </div>
-                        
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                          <h5 className="font-semibold text-gray-800 mb-2">Prenotazione Economica</h5>
-                          <p className="text-sm text-gray-600 mb-3">
-                            Tariffa scontata non rimborsabile. Pagamento anticipato richiesto.
-                          </p>
-                          <button
-                            onClick={() => handleOptionSelect(room.id, 'economic')}
-                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded transition-colors"
-                          >
-                            Prenota Economica
-                          </button>
-                        </div>
-                      </>
-                    )}
+                  {option.mealPlan && (
+                    <div className="meal-plan">
+                      <span className="meal-icon">🍽️</span>
+                      <span>{option.mealPlan}</span>
+                    </div>
+                  )}
+                  
+                  {option.cancellationPolicy && (
+                    <div className={`cancellation-policy ${
+                      option.cancellationPolicy.refundable ? 'refundable' : 'non-refundable'
+                    }`}>
+                      {option.cancellationPolicy.refundable ? '✓ Rimborsabile' : '⚠️ Non rimborsabile'}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="rate-price">
+                  <div className="price-main">{option.formattedPrice || `€${option.price}`}</div>
+                  <div className="price-note">a notte</div>
+                </div>
+                
+                <button
+                  onClick={() => handleOptionSelect(selectedRoom.id, option.id)}
+                  className="btn btn-primary btn-full rate-select-btn"
+                  disabled={loading}
+                >
+                  {loading ? 'Prenotazione...' : 'Seleziona'}
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="rate-option-card">
+              <div className="rate-content">
+                <h4 className="rate-name">Tariffa Standard</h4>
+                <p className="rate-description">
+                  Prenotazione standard con servizi inclusi
+                </p>
+              </div>
+              
+              <div className="rate-price">
+                <div className="price-main">{selectedRoom.formattedPrice || `€${selectedRoom.price}`}</div>
+                <div className="price-note">a notte</div>
+              </div>
+              
+              <button
+                onClick={() => handleOptionSelect(selectedRoom.id, 'standard')}
+                className="btn btn-primary btn-full rate-select-btn"
+                disabled={loading}
+              >
+                {loading ? 'Prenotazione...' : 'Seleziona'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Actions */}
+        <div className="bottom-actions">
+          <button onClick={handleBack} className="btn btn-ghost">
+            Indietro
+          </button>
+          <button className="btn btn-secondary btn-full" disabled>
+            Continua
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="room-selection-container">
+      {/* Header */}
+      <div className="selection-header">
+        <h2 className="selection-title">Seleziona la camera</h2>
+        <div className="selection-subtitle">
+          30 Mag - 02 Giu • 2 ospiti
+        </div>
+      </div>
+
+      {/* Rooms List */}
+      {rooms.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">😭</div>
+          <h3 className="empty-title">Nessuna camera disponibile</h3>
+          <p className="empty-description">Non abbiamo trovato camere per le date selezionate.</p>
+          <button onClick={onBack} className="btn btn-primary">
+            Modifica ricerca
+          </button>
+        </div>
+      ) : (
+        <div className="rooms-list">
+          {rooms.map((room) => (
+            <div key={room.id} className="room-card" onClick={() => handleRoomSelect(room)}>
+              <div className="room-card-layout">
+                <div className="room-image-container">
+                  <img 
+                    src={room.images?.[0] || 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'}
+                    alt={room.name}
+                    className="room-image"
+                  />
+                  {room.availabilityInfo && (
+                    <div className="availability-badge">
+                      Ne resta solo {room.availabilityInfo.remaining || 1}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="room-details">
+                  <h3 className="room-title">{room.name}</h3>
+                  <div className="room-meta">
+                    <div className="room-meta-item">
+                      <span className="meta-value">38 m²</span>
+                      <span className="meta-separator">|</span>
+                      <span className="meta-value">Max ospiti: 5</span>
+                      <span className="meta-icon">👥</span>
+                      <span className="meta-value">1</span>
+                      <span className="meta-icon">🚼</span>
+                    </div>
+                  </div>
+                  
+                  <p className="room-description line-clamp-3">
+                    {room.description || 'Suite con balconcini privati e vista Campo e Canale. Ambiente esclusivo e di pregio, di circa 50 mq, con camera da letto e splendido salotto...'}
+                    <button className="read-more-btn">leggi di più</button>
+                  </p>
+                  
+                  <div className="room-features">
+                    <div className="features-title">Servizi inclusi:</div>
+                    <div className="feature-list">
+                      <div className="feature-item">Aria condizionata</div>
+                      <div className="feature-item">Insonorizzazione</div>
+                      <div className="feature-item">Balcone</div>
+                      <div className="feature-item">Free Wi-Fi</div>
+                      <button className="feature-more">Vedi tutti</button>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>
       )}
-      
+
+      {/* Bottom Actions */}
+      <div className="bottom-actions">
+        <button onClick={onBack} className="btn btn-ghost">
+          Indietro
+        </button>
+        <button className="btn btn-secondary btn-full" disabled>
+          Continua
+        </button>
+      </div>
     </div>
   )
 }
