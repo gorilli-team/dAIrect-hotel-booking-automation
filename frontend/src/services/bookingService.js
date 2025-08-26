@@ -29,32 +29,90 @@ api.interceptors.response.use(
     return response.data
   },
   (error) => {
-    console.error('❌ Response Error FULL:', error)
-    console.error('❌ Response status:', error.response?.status)
-    console.error('❌ Response data DETAILED:', error.response?.data)
-    console.error('❌ Response headers:', error.response?.headers)
+    // COMPREHENSIVE ERROR DEBUG LOGGING
+    console.group('🔍 COMPREHENSIVE ERROR DEBUG')
+    console.error('❌ Complete Error Object:', error)
+    console.error('❌ Error Keys:', Object.keys(error))
+    console.error('❌ Error Constructor:', error.constructor.name)
+    console.error('❌ Error Message:', error.message)
+    console.error('❌ Error Code:', error.code)
+    console.error('❌ Error Config:', error.config)
     
+    // Response-specific logging
+    if (error.response) {
+      console.group('📡 RESPONSE DETAILS')
+      console.error('Status:', error.response.status)
+      console.error('Status Text:', error.response.statusText)
+      console.error('Headers:', error.response.headers)
+      console.error('Data (Full):', error.response.data)
+      console.error('Data Type:', typeof error.response.data)
+      console.error('Data Keys:', error.response.data ? Object.keys(error.response.data) : 'N/A')
+      console.groupEnd()
+    } else {
+      console.warn('⚠️ No response object available')
+    }
+    
+    // Request-specific logging
+    if (error.request) {
+      console.group('📤 REQUEST DETAILS')
+      console.error('Request:', error.request)
+      console.error('Request Status:', error.request.status)
+      console.error('Request Response Text:', error.request.responseText)
+      console.groupEnd()
+    } else {
+      console.warn('⚠️ No request object available')
+    }
+    
+    console.groupEnd()
+    
+    // Determine error message and preserve response data
     let message = 'Errore di connessione'
+    let errorData = null
     
     if (error.response?.data) {
-      const errorData = error.response.data
-      console.log('🔍 Analyzing error data:', errorData)
+      errorData = error.response.data
+      console.log('🔍 Processing error data:', errorData)
       
-      // Handle validation errors with details
-      if (errorData.error === 'Validation error' && errorData.details) {
-        console.log('🚫 Validation error details:', errorData.details)
-        message = `Errore di validazione: ${errorData.details.join(', ')}`
+      // Handle different error data structures
+      if (typeof errorData === 'string') {
+        message = errorData
+      } else if (errorData.error === 'Validation error') {
+        if (errorData.details && Array.isArray(errorData.details)) {
+          console.log('🚫 Validation error with details:', errorData.details)
+          message = `Errore di validazione: ${errorData.details.join(', ')}`
+        } else {
+          console.log('🚫 Validation error without details')
+          message = 'Errore di validazione (dettagli non disponibili)'
+        }
       } else if (errorData.error) {
         message = errorData.error
       } else if (errorData.message) {
         message = errorData.message
+      } else {
+        console.warn('⚠️ Unrecognized error data structure')
+        message = 'Errore sconosciuto dal server'
       }
     } else if (error.message) {
       message = error.message
     }
     
-    console.error('❌ Final error message:', message)
-    throw new Error(message)
+    console.error('❌ Final processed message:', message)
+    
+    // Create enhanced error object that preserves response data
+    const enhancedError = new Error(message)
+    enhancedError.response = error.response
+    enhancedError.request = error.request
+    enhancedError.code = error.code
+    enhancedError.config = error.config
+    enhancedError.originalError = error
+    
+    // For debugging: add errorData if available
+    if (errorData) {
+      enhancedError.errorData = errorData
+    }
+    
+    console.error('❌ Enhanced error object keys:', Object.keys(enhancedError))
+    throw enhancedError
   }
 )
 

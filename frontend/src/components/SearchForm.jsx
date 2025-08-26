@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Search, Hotel, MapPin, Star } from 'lucide-react'
+import { Calendar, Users, Search, Hotel, MapPin, Star, ChevronDown, ChevronUp } from 'lucide-react'
 import moment from 'moment'
 import './SearchForm.css'
 
@@ -50,6 +50,19 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
   })
 
   const [errors, setErrors] = useState({})
+  const [isHotelDropdownOpen, setIsHotelDropdownOpen] = useState(false)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isHotelDropdownOpen && !event.target.closest('.hotel-selector')) {
+        setIsHotelDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isHotelDropdownOpen])
 
   // Set default dates on mount
   useEffect(() => {
@@ -59,8 +72,8 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
       // Use preset test dates for faster testing
       setFormData(prev => ({
         ...prev,
-        checkinDate: '2026-02-06',
-        checkoutDate: '2026-02-08'
+        checkinDate: '2026-04-03',
+        checkoutDate: '2026-04-05'
       }))
     }
   }, [initialData])
@@ -135,45 +148,79 @@ const SearchForm = ({ onSearch, loading, initialData }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      {/* Hotel Selection */}
+      {/* Hotel Selection - Compact Dropdown */}
       <div className="form-group">
         <label className="form-label">Seleziona Hotel</label>
-        <div className="hotel-grid">
-          {HOTELS.map((hotel) => (
-            <div
-              key={hotel.id}
-              className={`hotel-card ${
-                formData.hotel.id === hotel.id ? 'hotel-card-selected' : ''
-              }`}
-              onClick={() => handleChange('hotel', hotel)}
-            >
-              <div className="hotel-card-image">
-                <img 
-                  src={hotel.image} 
-                  alt={hotel.name}
-                  className="hotel-image"
-                />
-              </div>
-              <div className="hotel-card-content">
-                <h3 className="hotel-name">{hotel.name}</h3>
-                <div className="hotel-rating">
-                  <Star className="rating-icon" />
-                  <span className="rating-value">{hotel.rating}</span>
-                  <span className="rating-text">Fantastico ({hotel.reviews} recensioni)</span>
+        <div className="hotel-selector">
+          {/* Selected Hotel Display */}
+          <button
+            type="button"
+            className="hotel-selected-display"
+            onClick={() => setIsHotelDropdownOpen(!isHotelDropdownOpen)}
+          >
+            <div className="hotel-selected-info">
+              <div className="hotel-selected-main">
+                <span className="hotel-emoji">{formData.hotel.emoji}</span>
+                <div className="hotel-selected-text">
+                  <span className="hotel-selected-name">{formData.hotel.name}</span>
+                  <span className="hotel-selected-location">
+                    <MapPin className="location-icon-small" />
+                    {formData.hotel.location}
+                  </span>
                 </div>
-                <p className="hotel-location">
-                  <MapPin className="location-icon" />
-                  {hotel.location}
-                </p>
-                <p className="hotel-description line-clamp-2">{hotel.description}</p>
               </div>
-              {formData.hotel.id === hotel.id && (
-                <div className="hotel-selected-indicator">
-                  <div className="selected-dot" />
-                </div>
-              )}
+              <div className="hotel-rating-compact">
+                <Star className="rating-icon-small" />
+                <span className="rating-value-small">{formData.hotel.rating}</span>
+              </div>
             </div>
-          ))}
+            {isHotelDropdownOpen ? (
+              <ChevronUp className="dropdown-chevron" />
+            ) : (
+              <ChevronDown className="dropdown-chevron" />
+            )}
+          </button>
+
+          {/* Dropdown List */}
+          {isHotelDropdownOpen && (
+            <div className="hotel-dropdown-list">
+              {HOTELS.map((hotel) => (
+                <button
+                  key={hotel.id}
+                  type="button"
+                  className={`hotel-dropdown-item ${
+                    formData.hotel.id === hotel.id ? 'hotel-dropdown-item-selected' : ''
+                  }`}
+                  onClick={() => {
+                    handleChange('hotel', hotel)
+                    setIsHotelDropdownOpen(false)
+                  }}
+                >
+                  <div className="hotel-dropdown-main">
+                    <span className="hotel-emoji">{hotel.emoji}</span>
+                    <div className="hotel-dropdown-text">
+                      <span className="hotel-dropdown-name">{hotel.name}</span>
+                      <span className="hotel-dropdown-location">
+                        <MapPin className="location-icon-small" />
+                        {hotel.location}
+                      </span>
+                      <span className="hotel-dropdown-description">{hotel.description}</span>
+                    </div>
+                  </div>
+                  <div className="hotel-dropdown-rating">
+                    <Star className="rating-icon-small" />
+                    <span className="rating-value-small">{hotel.rating}</span>
+                    <span className="rating-reviews-small">({hotel.reviews})</span>
+                  </div>
+                  {formData.hotel.id === hotel.id && (
+                    <div className="hotel-dropdown-selected-indicator">
+                      <div className="selected-check">✓</div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

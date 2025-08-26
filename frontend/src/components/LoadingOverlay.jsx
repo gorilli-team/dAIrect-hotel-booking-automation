@@ -1,44 +1,57 @@
 import React from 'react'
-import { Loader2, Bot } from 'lucide-react'
+import { Bot, Zap, CheckCircle } from 'lucide-react'
+import './LoadingOverlay.css'
 
 const LoadingOverlay = ({ message = 'Caricamento in corso...' }) => {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-mx-auto mx-4 shadow-2xl">
-        <div className="text-center">
-          {/* Icon Animation */}
-          <div className="relative mb-6">
-            <Bot className="h-16 w-16 text-booking-blue mx-auto" />
-            <div className="absolute -top-2 -right-2">
-              <Loader2 className="h-6 w-6 animate-spin text-booking-orange" />
+    <div className="loading-overlay">
+      <div className="loading-modal">
+        {/* Background Pattern */}
+        <div className="loading-background-pattern"></div>
+        
+        <div className="loading-content">
+          {/* Modern Icon with Animation */}
+          <div className="loading-icon-container">
+            <div className="loading-icon-bg">
+              <Bot className="loading-bot-icon" />
+            </div>
+            <div className="loading-pulse-ring"></div>
+            <div className="loading-pulse-ring loading-pulse-ring-delay"></div>
+            
+            {/* Floating Action Icons */}
+            <div className="loading-action-icons">
+              <Zap className="loading-action-icon loading-action-icon-1" />
+              <CheckCircle className="loading-action-icon loading-action-icon-2" />
             </div>
           </div>
           
-          {/* Message */}
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Automazione in corso
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {message}
-          </p>
-          
-          {/* Progress Dots */}
-          <div className="flex justify-center space-x-1">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-3 h-3 bg-booking-blue rounded-full animate-pulse"
-                style={{
-                  animationDelay: `${i * 0.3}s`,
-                  animationDuration: '1.5s'
-                }}
-              />
-            ))}
+          {/* Main Content */}
+          <div className="loading-text-container">
+            <h2 className="loading-title">Automazione in corso</h2>
+            <p className="loading-message">{message}</p>
+            
+            {/* Progress Bar */}
+            <div className="loading-progress-container">
+              <div className="loading-progress-bar">
+                <div className="loading-progress-fill"></div>
+              </div>
+              <span className="loading-progress-text">Analizzando disponibilità...</span>
+            </div>
           </div>
           
-          {/* Additional Info */}
-          <div className="mt-4 text-xs text-gray-500">
-            <p>🎯 Playwright sta eseguendo le azioni</p>
+          {/* Status Info */}
+          <div className="loading-status">
+            <div className="loading-status-item">
+              <span className="loading-status-icon">⚡</span>
+              <span className="loading-status-text">Powered by Takyon.io</span>
+            </div>
+          </div>
+          
+          {/* Loading Dots */}
+          <div className="loading-dots">
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
           </div>
         </div>
       </div>

@@ -335,22 +335,6 @@ function AppLayout() {
         </div>
       )}
 
-      {/* Debug info in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          position: 'fixed',
-          bottom: '16px',
-          left: '16px',
-          background: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          zIndex: '1200'
-        }}>
-          Step: {currentStep} | Session: {sessionId?.slice(0,8)} | Rooms: {availableRooms?.length || 0}
-        </div>
-      )}
     </div>
   )
 }
