@@ -1,4 +1,4 @@
-const { ChromiumBrowser, chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const logger = require('../utils/logger');
 const uuid = require('uuid');
 const { 
@@ -13,9 +13,45 @@ const {
 // Each session will have its own browser instance
 
 async function initBrowser() {
-  logger.info('Initializing new Playwright browser instance');
+  logger.info('Initializing browser connection');
   
-  // Always create a new browser instance for each session
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  const browserlessEndpoint = process.env.BROWSERLESS_ENDPOINT || 'wss://production-sfo.browserless.io';
+  const useBrowserless = process.env.USE_BROWSERLESS === 'true' || process.env.NODE_ENV === 'production';
+  
+  if (browserlessToken && useBrowserless) {
+    // Use Browserless in production or when explicitly enabled
+    logger.info('🌐 Connecting to Browserless cloud service');
+    // Use correct Browserless WebSocket URL format
+    const wsEndpoint = `${browserlessEndpoint}/?token=${browserlessToken}`;
+    
+    try {
+      logger.info('Attempting Browserless connection with details:', {
+        endpoint: browserlessEndpoint,
+        hasToken: !!browserlessToken,
+        tokenLength: browserlessToken ? browserlessToken.length : 0
+      });
+      
+      const browser = await chromium.connect({
+        wsEndpoint,
+        timeout: 60000 // Increased timeout to 60 seconds
+      });
+      
+      logger.info('✅ Successfully connected to Browserless');
+      return browser;
+    } catch (error) {
+      logger.error('❌ Failed to connect to Browserless:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        wsEndpoint: wsEndpoint.replace(browserlessToken, 'TOKEN_REDACTED')
+      });
+      logger.info('⚠️ Falling back to local browser');
+    }
+  }
+  
+  // Fallback to local browser (development or if Browserless fails)
+  logger.info('🖥️ Using local browser instance');
   const browser = await chromium.launch({
     headless: process.env.HEADLESS !== 'false',
     slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
@@ -36,7 +72,7 @@ async function initBrowser() {
     ]
   });
   
-  logger.info('New browser instance created successfully');
+  logger.info('✅ Local browser instance created successfully');
   return browser;
 }
 

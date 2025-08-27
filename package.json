@@ -12,8 +12,10 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend",
-    "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start",
+    "build": "echo 'Backend ready for deployment'",
+    "start": "cd backend && npm run start:production",
+    "start:production": "cd backend && npm run start:production",
+    "install:backend": "cd backend && npm install",
     "test:setup": "node test-setup.js",
     "setup": "./setup.sh"
   },
