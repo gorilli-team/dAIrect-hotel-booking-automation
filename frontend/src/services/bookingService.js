@@ -9,10 +9,10 @@ const getBaseURL = () => {
     allEnvVars: import.meta.env
   })
   
-  // In production, use environment variable, otherwise use proxy
-  if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
-    const railwayUrl = `${import.meta.env.VITE_API_BASE_URL}/api/booking`
-    console.log('🚄 Using Railway URL:', railwayUrl)
+  // TEMPORARY FIX: Force Railway URL in production
+  if (import.meta.env.PROD) {
+    const railwayUrl = 'https://web-production-8cdd.up.railway.app/api/booking'
+    console.log('🚄 FORCED Railway URL:', railwayUrl)
     return railwayUrl
   }
   
