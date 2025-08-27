@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: true,
-      allowedHosts: ['081393fdbe73.ngrok-free.app'],
+      allowedHosts: ['8e18fbc2a528.ngrok-free.app'],
       proxy: {
         '/api': {
           target: env.BACKEND_URL || 'http://localhost:3001',
