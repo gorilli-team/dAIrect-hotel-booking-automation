@@ -2,10 +2,10 @@
 nixPkgs = ["nodejs_18", "chromium"]
 
 [phases.install]
-cmd = "npm ci"
+cmd = "cd backend && npm ci"
 
 [phases.build]
-cmd = "echo 'Build complete'"
+cmd = "echo 'Build complete - backend ready'"
 
 [start]
-cmd = "npm run start:production"
+cmd = "cd backend && npm run start:production"

@@ -57,9 +57,12 @@ LOG_FILE=logs/booking.log
 ### 3. Deploy Configuration
 
 Railway will automatically:
-- Install dependencies using `npm ci`
+- Detect the monorepo structure with backend folder
+- Install dependencies in backend directory using `npm ci`
 - Set up Chromium for Playwright fallback
-- Start the server using `npm run start:production`
+- Start the server using `cd backend && npm run start:production`
+
+**📁 Important:** The configuration is set to deploy only the `backend` folder, not the entire monorepo.
 
 ### 4. Verify Deployment
 
