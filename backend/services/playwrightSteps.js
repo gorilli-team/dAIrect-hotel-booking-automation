@@ -29,13 +29,24 @@ async function initBrowser() {
       logger.info('Attempting Browserless connection with details:', {
         endpoint: browserlessEndpoint,
         hasToken: !!browserlessToken,
-        tokenLength: browserlessToken ? browserlessToken.length : 0
+        tokenLength: browserlessToken ? browserlessToken.length : 0,
+        wsEndpoint: wsEndpoint.replace(browserlessToken, 'TOKEN_REDACTED'),
+        nodeEnv: process.env.NODE_ENV,
+        useBrowserless: useBrowserless
       });
       
+      logger.info('🔄 Connecting to Browserless WebSocket...');
       const browser = await chromium.connect({
         wsEndpoint,
-        timeout: 60000 // Increased timeout to 60 seconds
+        timeout: 30000, // Reduced timeout for faster fallback
+        headers: {
+          'User-Agent': 'PlaywrightBot/1.0'
+        }
       });
+      
+      logger.info('🎯 Testing browser connection...');
+      await browser.version(); // Test connection
+      logger.info('✅ Browserless connection verified');
       
       logger.info('✅ Successfully connected to Browserless');
       return browser;
