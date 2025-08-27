@@ -17,7 +17,7 @@ async function initBrowser() {
   
   const browserlessToken = process.env.BROWSERLESS_TOKEN;
   const browserlessEndpoint = process.env.BROWSERLESS_ENDPOINT || 'wss://production-sfo.browserless.io';
-  const useBrowserless = process.env.USE_BROWSERLESS === 'true' && process.env.NODE_ENV !== 'production'; // Temporarily disable in production
+  const useBrowserless = process.env.USE_BROWSERLESS === 'true' || process.env.NODE_ENV === 'production'; // Use Browserless in production
   
   if (browserlessToken && useBrowserless) {
     // Use Browserless in production or when explicitly enabled
