@@ -2,10 +2,21 @@ import axios from 'axios'
 
 // Create axios instance with base configuration
 const getBaseURL = () => {
+  // Debug logging
+  console.log('🔍 Environment Debug:', {
+    isProd: import.meta.env.PROD,
+    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+    allEnvVars: import.meta.env
+  })
+  
   // In production, use environment variable, otherwise use proxy
   if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
-    return `${import.meta.env.VITE_API_BASE_URL}/api/booking`
+    const railwayUrl = `${import.meta.env.VITE_API_BASE_URL}/api/booking`
+    console.log('🚄 Using Railway URL:', railwayUrl)
+    return railwayUrl
   }
+  
+  console.log('🏠 Using local proxy: /api/booking')
   return '/api/booking' // Use Vite proxy in development
 }
 
