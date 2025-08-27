@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ["nodejs_18", "chromium"]
+nixPkgs = ["nodejs_20", "chromium"]
 
 [phases.install]
-cmd = "cd backend && npm ci"
+cmd = "cd backend && npm ci --omit=dev"
 
 [phases.build]
-cmd = "echo 'Build complete - backend ready'"
+cmd = "echo 'Backend deployment ready'"
 
 [start]
 cmd = "cd backend && npm run start:production"
