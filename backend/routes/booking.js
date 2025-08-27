@@ -2305,4 +2305,27 @@ router.delete('/session/:sessionId', async (req, res) => {
   });
 });
 
+// Temporary debug endpoint to check environment variables
+router.get('/debug/env', (req, res) => {
+  logger.info('🔍 Debug endpoint called - environment variables check');
+  
+  const envVars = {
+    NODE_ENV: process.env.NODE_ENV,
+    USE_BROWSERLESS: process.env.USE_BROWSERLESS,
+    BROWSERLESS_ENDPOINT: process.env.BROWSERLESS_ENDPOINT,
+    BROWSERLESS_TOKEN: process.env.BROWSERLESS_TOKEN ? 
+      `${process.env.BROWSERLESS_TOKEN.substring(0, 8)}...${process.env.BROWSERLESS_TOKEN.substring(process.env.BROWSERLESS_TOKEN.length - 8)}` : 
+      'NOT_SET',
+    TARGET_HOTEL_URL: process.env.TARGET_HOTEL_URL
+  };
+  
+  logger.info('🔍 Environment variables:', envVars);
+  
+  res.json({
+    message: 'Debug info',
+    environment: envVars,
+    timestamp: new Date().toISOString()
+  });
+});
+
 module.exports = router;
