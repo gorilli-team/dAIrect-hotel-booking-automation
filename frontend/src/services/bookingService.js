@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: '/api/booking',
+  baseURL: 'https://aa099fc6b0e9.ngrok-free.app/api/booking',
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json'
