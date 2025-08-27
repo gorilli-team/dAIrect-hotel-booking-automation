@@ -53,22 +53,46 @@ async function initBrowser() {
   // Fallback to local browser (development or if Browserless fails)
   logger.info('🖥️ Using local browser instance');
   const browser = await chromium.launch({
-    headless: process.env.HEADLESS !== 'false',
-    slowMo: process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : 0,
+    headless: true, // Force headless in production
+    slowMo: 0, // No slow motion in production
     args: [
       '--no-sandbox',
+      '--disable-setuid-sandbox',
       '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
+      '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess',
       '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
       '--disable-dev-shm-usage',
       '--disable-ipc-flooding-protection',
-      '--disable-renderer-backgrounding',
-      '--disable-backgrounding-occluded-windows',
       '--disable-camera',
       '--disable-microphone',
       '--deny-permission-prompts',
       '--disable-permissions-api',
-      '--block-new-web-contents'
+      '--block-new-web-contents',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--no-first-run',
+      '--safebrowsing-disable-auto-update',
+      '--ignore-certificate-errors',
+      '--ignore-ssl-errors',
+      '--ignore-certificate-errors-spki-list',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-background-media-suspend',
+      '--disable-client-side-phishing-detection',
+      '--disable-default-apps',
+      '--disable-hang-monitor',
+      '--disable-popup-blocking',
+      '--disable-prompt-on-repost',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--no-zygote',
+      '--single-process' // Railway specific - forces single process
     ]
   });
   

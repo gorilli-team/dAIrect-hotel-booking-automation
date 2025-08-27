@@ -1,5 +1,20 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "chromium"]
+nixPkgs = [
+  "nodejs_20", 
+  "chromium",
+  "xvfb-run",
+  "fontconfig",
+  "freetype",
+  "harfbuzz",
+  "ca-certificates",
+  "fonts-liberation",
+  "gconf-service",
+  "libgconf-2-4",
+  "libxss1",
+  "libappindicator1",
+  "libnss3",
+  "libgbm1"
+]
 
 [phases.install]
 cmd = "cd backend && npm ci --omit=dev"
