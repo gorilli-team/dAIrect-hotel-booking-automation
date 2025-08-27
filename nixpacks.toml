@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_18", "chromium"]
+
+[phases.install]
+cmd = "npm ci"
+
+[phases.build]
+cmd = "echo 'Build complete'"
+
+[start]
+cmd = "npm run start:production"
