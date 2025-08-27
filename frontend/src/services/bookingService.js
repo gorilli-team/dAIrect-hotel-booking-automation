@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-// Create axios instance with base configuration for the booking API
+// Create axios instance with base configuration
 const api = axios.create({
   baseURL: `https://081393fdbe73.ngrok-free.app/api/booking`,
   timeout: 300000, // 5 minutes timeout for complex operations
