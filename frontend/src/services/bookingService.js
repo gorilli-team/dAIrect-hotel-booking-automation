@@ -5,8 +5,9 @@ const api = axios.create({
   baseURL: `https://gator-singular-pigeon.ngrok-free.app/api/booking`,
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true' // This is the key header for ngrok
+  },
 })
 
 // Request interceptor for logging

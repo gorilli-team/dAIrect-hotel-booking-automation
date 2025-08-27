@@ -337,6 +337,15 @@ const personalDataSchema = Joi.object({
 
 // POST /api/booking/start-search
 router.post('/start-search', async (req, res) => {
+  console.log('=== POST start-search Debug ===');
+  console.log('Origin:', req.headers.origin);
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('User-Agent:', req.headers['user-agent']);
+  console.log('Referer:', req.headers.referer);
+  console.log('Body:', req.body);
+  console.log('=============================');
+  
   try {
     // Validate input
     const { error, value } = searchSchema.validate(req.body);

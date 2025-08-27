@@ -8,10 +8,12 @@ const bookingRoutes = require('./routes/booking');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Simple CORS for development - allow everything
 app.use(cors({
-  origin: true, // Allow all origins temporarily
-  credentials: true
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: '*'
 }));
 
 app.use(express.json({ limit: '50mb' }));
@@ -22,6 +24,7 @@ app.use((req, res, next) => {
   logger.info(`${req.method} ${req.url}`, {
     ip: req.ip,
     userAgent: req.get('User-Agent'),
+    origin: req.get('Origin'),
     body: req.method === 'POST' ? req.body : undefined
   });
   next();
@@ -76,4 +79,5 @@ app.listen(PORT, () => {
   logger.info(`🚀 Hotel Booking Automation Server running on port ${PORT}`);
   logger.info(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`🎯 Target Hotel: ${process.env.TARGET_HOTEL_URL}`);
+  logger.info(`🌐 CORS: Allow all origins (development mode)`);
 });
