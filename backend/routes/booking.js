@@ -2328,4 +2328,68 @@ router.get('/debug/env', (req, res) => {
   });
 });
 
+// Test direct Browserless connection
+router.get('/debug/browserless-test', async (req, res) => {
+  const { chromium } = require('playwright-core');
+  
+  logger.info('🧪 Testing direct Browserless connection');
+  
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  const wsEndpoint = `ws://production-sfo.browserless.io/?token=${browserlessToken}`;
+  
+  if (!browserlessToken) {
+    return res.json({
+      success: false,
+      error: 'BROWSERLESS_TOKEN not set',
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  logger.info('Attempting Browserless connection test', {
+    wsEndpoint: wsEndpoint.replace(browserlessToken, 'TOKEN_REDACTED')
+  });
+  
+  try {
+    // Test connection with very short timeout
+    const browser = await chromium.connect({
+      wsEndpoint,
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'User-Agent': 'PlaywrightBot/1.0 Debug'
+      }
+    });
+    
+    logger.info('✅ Connected to Browserless successfully');
+    
+    // Test basic functionality
+    const version = await browser.version();
+    logger.info('Browser version:', version);
+    
+    // Clean up
+    await browser.close();
+    
+    res.json({
+      success: true,
+      message: 'Successfully connected to Browserless',
+      browserVersion: version,
+      connectionTime: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('❌ Failed to connect to Browserless:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack.split('\n').slice(0, 3).join('\n')
+    });
+    
+    res.json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      wsEndpoint: wsEndpoint.replace(browserlessToken, 'TOKEN_REDACTED'),
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 module.exports = router;
