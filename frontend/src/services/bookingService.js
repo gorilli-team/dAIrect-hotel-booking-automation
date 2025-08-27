@@ -11,7 +11,7 @@ const getBaseURL = () => {
   
   // TEMPORARY FIX: Force Railway URL in production
   if (import.meta.env.PROD) {
-    const railwayUrl = 'https://web-production-8cdd.up.railway.app/api/booking'
+    const railwayUrl = 'https://dairect-hotel-booking-automation-production.up.railway.app/api/booking'
     console.log('🚄 FORCED Railway URL:', railwayUrl)
     return railwayUrl
   }
@@ -374,8 +374,8 @@ export const bookingService = {
    */
   async healthCheck() {
     try {
-      const healthUrl = import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/health`
+      const healthUrl = import.meta.env.PROD
+        ? 'https://dairect-hotel-booking-automation-production.up.railway.app/api/health'
         : '/api/health'
       
       const response = await axios.get(healthUrl)
