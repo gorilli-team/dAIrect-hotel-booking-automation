@@ -22,8 +22,8 @@ async function initBrowser() {
   if (browserlessToken && useBrowserless) {
     // Use Browserless in production or when explicitly enabled
     logger.info('🌐 Connecting to Browserless cloud service');
-    // Use correct Browserless HTTP endpoint format from official guide
-    const wsEndpoint = `${browserlessEndpoint}/chrome/playwright?token=${browserlessToken}`;
+    // Use correct Browserless WebSocket endpoint format
+    const wsEndpoint = `wss://production-sfo.browserless.io/?token=${browserlessToken}`;
     
     try {
       logger.info('Attempting Browserless connection with details:', {
