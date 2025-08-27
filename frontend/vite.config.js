@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: true,
-      allowedHosts: ['gator-singular-pigeon.ngrok-free.app'],
+      allowedHosts: ['dairect.gorilli.io'],
       proxy: {
         '/api': {
           target: env.BACKEND_URL || 'http://localhost:3001',

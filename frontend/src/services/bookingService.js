@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: `https://gator-singular-pigeon.ngrok-free.app/api/booking`,
+  baseURL: `https://dairect.gorilli.io/api/booking`,
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json',
