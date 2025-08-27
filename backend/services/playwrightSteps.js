@@ -17,12 +17,13 @@ async function initBrowser() {
   
   const browserlessToken = process.env.BROWSERLESS_TOKEN;
   const browserlessEndpoint = process.env.BROWSERLESS_ENDPOINT || 'https://production-sfo.browserless.io';
-  const useBrowserless = process.env.USE_BROWSERLESS === 'true' || process.env.NODE_ENV === 'production'; // Use Browserless in production
+  const useBrowserless = process.env.USE_BROWSERLESS === 'true' && process.env.NODE_ENV !== 'production'; // Disable Browserless in production due to network issues
   
   if (browserlessToken && useBrowserless) {
     // Use Browserless in production or when explicitly enabled
     logger.info('🌐 Connecting to Browserless cloud service');
-    // Use correct Browserless WebSocket endpoint format
+    // Try HTTPS endpoint first, then WebSocket as fallback
+    const httpsEndpoint = `https://production-sfo.browserless.io/chrome/playwright?token=${browserlessToken}`;
     const wsEndpoint = `ws://production-sfo.browserless.io/?token=${browserlessToken}`;
     
     try {
