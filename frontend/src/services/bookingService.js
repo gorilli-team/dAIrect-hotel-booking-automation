@@ -1,8 +1,16 @@
 import axios from 'axios'
 
 // Create axios instance with base configuration
+const getBaseURL = () => {
+  // In production, use environment variable, otherwise use proxy
+  if (import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL) {
+    return `${import.meta.env.VITE_API_BASE_URL}/api/booking`
+  }
+  return '/api/booking' // Use Vite proxy in development
+}
+
 const api = axios.create({
-  baseURL: '/api/booking',
+  baseURL: getBaseURL(),
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json'
@@ -355,7 +363,11 @@ export const bookingService = {
    */
   async healthCheck() {
     try {
-      const response = await axios.get('/api/health')
+      const healthUrl = import.meta.env.PROD && import.meta.env.VITE_API_BASE_URL
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/health`
+        : '/api/health'
+      
+      const response = await axios.get(healthUrl)
       return response.data
     } catch (error) {
       console.error('Health check failed:', error)
