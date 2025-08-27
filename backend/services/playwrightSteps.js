@@ -23,7 +23,7 @@ async function initBrowser() {
     // Use Browserless in production or when explicitly enabled
     logger.info('🌐 Connecting to Browserless cloud service');
     // Use correct Browserless WebSocket endpoint format
-    const wsEndpoint = `wss://production-sfo.browserless.io/?token=${browserlessToken}`;
+    const wsEndpoint = `ws://production-sfo.browserless.io/?token=${browserlessToken}`;
     
     try {
       logger.info('Attempting Browserless connection with details:', {
