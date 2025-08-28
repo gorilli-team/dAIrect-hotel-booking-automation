@@ -8,6 +8,8 @@ const {
   AVAILABILITY_RESULTS_SELECTORS,
   BOOKING_COMPLETION_SELECTORS
 } = require('./aiSelector');
+const fs = require('fs');
+const path = require('path');
 
 // Remove shared browser instance to prevent session conflicts
 // Each session will have its own browser instance
@@ -247,7 +249,13 @@ async function navigateToCorrectMonth(page, targetMonth, targetYear) {
 }
 
 async function createPage(browser) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    userAgent: process.env.PLAYWRIGHT_UA || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: { width: 1366, height: 768 },
+    locale: 'it-IT',
+    timezoneId: 'Europe/Rome',
+    ignoreHTTPSErrors: true
+  });
   const page = await context.newPage();
   
   // Block tracking scripts and ads for better performance
@@ -282,7 +290,9 @@ async function createPage(browser) {
 async function captureScreenshot(page, filename) {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const screenshotPath = `logs/screenshot-${filename}-${timestamp}.png`;
+    const screenshotDir = process.env.SCREENSHOT_DIR || '/tmp/hotel-booking-automation/logs';
+    try { fs.mkdirSync(screenshotDir, { recursive: true }); } catch (e) {}
+    const screenshotPath = path.join(screenshotDir, `screenshot-${filename}-${timestamp}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
     logger.info('Screenshot captured', { path: screenshotPath });
     return screenshotPath;
