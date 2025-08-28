@@ -1,8 +1,10 @@
 import axios from 'axios'
 
+const API_BASE = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: `https://dairect.gorilli.io/api/booking`,
+  baseURL: `${API_BASE}/api/booking`,
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json',
@@ -356,7 +358,7 @@ export const bookingService = {
    */
   async healthCheck() {
     try {
-      const response = await axios.get('/api/health')
+      const response = await axios.get(`${API_BASE}/api/health`)
       return response.data
     } catch (error) {
       console.error('Health check failed:', error)
