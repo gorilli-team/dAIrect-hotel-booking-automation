@@ -5,9 +5,10 @@
   "main": "server.js",
   "scripts": {
     "dev": "cd .. && nodemon backend/server.js",
-    "start": "cd .. && node backend/server.js",
+    "start": "node server.js",
     "start:production": "NODE_ENV=production node server.js",
     "install-playwright": "npx playwright install",
+    "postinstall": "npx playwright install chromium",
     "test": "jest"
   },
   "dependencies": {
@@ -19,8 +20,7 @@
     "joi": "^17.11.0",
     "moment": "^2.29.4",
     "openai": "^4.20.1",
-    "playwright": "^1.40.1",
-    "playwright-core": "^1.55.0",
+    "playwright": "^1.55.0",
     "uuid": "^9.0.1",
     "winston": "^3.11.0"
   },
