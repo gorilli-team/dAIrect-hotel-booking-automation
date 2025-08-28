@@ -1,27 +1,10 @@
 import axios from 'axios'
 
-// Create axios instance with base configuration
-const getBaseURL = () => {
-  // Debug logging
-  console.log('🔍 Environment Debug:', {
-    isProd: import.meta.env.PROD,
-    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
-    allEnvVars: import.meta.env
-  })
-  
-  // TEMPORARY FIX: Force Railway URL in production
-  if (import.meta.env.PROD) {
-    const railwayUrl = 'https://dairect-hotel-booking-automation-production.up.railway.app/api/booking'
-    console.log('🚄 FORCED Railway URL:', railwayUrl)
-    return railwayUrl
-  }
-  
-  console.log('🏠 Using local proxy: /api/booking')
-  return '/api/booking' // Use Vite proxy in development
-}
+const API_BASE = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
+// Create axios instance with base configuration
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: `${API_BASE}/api/booking`,
   timeout: 300000, // 5 minutes timeout for complex operations
   headers: {
     'Content-Type': 'application/json'
@@ -374,11 +357,7 @@ export const bookingService = {
    */
   async healthCheck() {
     try {
-      const healthUrl = import.meta.env.PROD
-        ? 'https://dairect-hotel-booking-automation-production.up.railway.app/api/health'
-        : '/api/health'
-      
-      const response = await axios.get(healthUrl)
+      const response = await axios.get(`${API_BASE}/api/health`)
       return response.data
     } catch (error) {
       console.error('Health check failed:', error)
