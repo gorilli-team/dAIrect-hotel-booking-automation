@@ -9,6 +9,11 @@ const {
   BOOKING_COMPLETION_SELECTORS
 } = require('./aiSelector');
 
+const fs = require('fs');
+const path = require('path');
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || (process.env.NODE_ENV === 'production' ? '/tmp/hotel-booking-automation/logs' : path.join(__dirname, '..', 'logs'));
+try { fs.mkdirSync(SCREENSHOT_DIR, { recursive: true }); } catch (e) {}
+
 // Remove shared browser instance to prevent session conflicts
 // Each session will have its own browser instance
 
@@ -210,7 +215,7 @@ async function createPage(browser) {
 async function captureScreenshot(page, filename) {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const screenshotPath = `logs/screenshot-${filename}-${timestamp}.png`;
+    const screenshotPath = path.join(SCREENSHOT_DIR, `screenshot-${filename}-${timestamp}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
     logger.info('Screenshot captured', { path: screenshotPath });
     return screenshotPath;

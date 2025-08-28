@@ -5,9 +5,12 @@
   "main": "server.js",
   "scripts": {
     "dev": "cd .. && nodemon backend/server.js",
-    "start": "cd .. && node backend/server.js",
+    "start": "node server.js",
     "install-playwright": "npx playwright install",
     "test": "jest"
+  },
+  "engines": {
+    "node": "20.x"
   },
   "dependencies": {
     "express": "^4.18.2",

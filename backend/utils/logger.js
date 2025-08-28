@@ -3,7 +3,8 @@ const path = require('path');
 
 // Create logs directory if it doesn't exist
 const fs = require('fs');
-const logsDir = path.join(__dirname, '..', 'logs');
+const defaultLogsDir = path.join(__dirname, '..', 'logs');
+const logsDir = process.env.LOG_DIR || (process.env.NODE_ENV === 'production' ? '/tmp/hotel-booking-automation/logs' : defaultLogsDir);
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
@@ -35,8 +36,8 @@ const logger = winston.createLogger({
   ],
 });
 
-// If we're not in production, also log to the console
-if (process.env.NODE_ENV !== 'production') {
+// Always log to console (Heroku-friendly). Set LOG_TO_CONSOLE=false to disable.
+if (process.env.LOG_TO_CONSOLE !== 'false') {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
       winston.format.colorize(),
