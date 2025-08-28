@@ -96,7 +96,8 @@ async function initBrowser() {
       '--ignore-ssl-errors',
       '--ignore-certificate-errors-spki-list',
       '--disable-gpu',
-      '--disable-software-rasterizer',
+      '--use-gl=swiftshader',
+      '--window-size=1366,768',
       '--disable-background-media-suspend',
       '--disable-client-side-phishing-detection',
       '--disable-default-apps',
@@ -105,8 +106,7 @@ async function initBrowser() {
       '--disable-prompt-on-repost',
       '--disable-sync',
       '--metrics-recording-only',
-      '--no-zygote',
-      '--single-process' // Railway specific - forces single process
+      '--no-zygote'
     ]
   });
   
